@@ -3,6 +3,22 @@
 import { useState } from 'react';
 import { Statistics } from '@/lib/types';
 
+// Format days into years and months (e.g., "2y", "1y 3m", "1m")
+function formatDaysToYearsMonths(days: number): string {
+  // Convert days to months (approximately 30 days per month)
+  const totalMonths = Math.max(1, Math.ceil(days / 30));
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+
+  if (years === 0) {
+    return `${months}m`;
+  }
+  if (months === 0) {
+    return `${years}y`;
+  }
+  return `${years}y ${months}m`;
+}
+
 interface StatsPanelProps {
   statistics: Statistics[];
   isLoading: boolean;
@@ -170,7 +186,7 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
               label="To Return to ATH"
               value={stats.toReturnToATH > 0 ? `+${formatNumber(stats.toReturnToATH)}%` : '0.00%'}
             />
-            <StatRow label="Longest DD (days)" value={stats.longestDrawdownDays.toLocaleString()} />
+            <StatRow label="Longest DD" value={formatDaysToYearsMonths(stats.longestDrawdownDays)} />
           </CollapsibleSection>
 
           {/* STATS Section */}

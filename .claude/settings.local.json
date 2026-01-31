@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\pbelz\\\\OneDrive\\\\Claude\\\\StooqAnalyzer\\\\*Example*\")",
+      "Bash(dir /b \"C:\\\\Users\\\\pbelz\\\\OneDrive\\\\Claude\\\\StooqAnalyzer\")",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

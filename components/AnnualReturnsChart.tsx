@@ -217,6 +217,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
             <YAxis
               tick={false}
               axisLine={false}
+              width={0}
               domain={[yMin, yMax]}
             />
             <Tooltip

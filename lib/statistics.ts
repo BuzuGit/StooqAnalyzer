@@ -106,20 +106,22 @@ function calculateDrawdowns(data: StooqDataPoint[]): {
   let maxDrawdown = 0;
   let maxDrawdownDate = data[0].date;
   let longestDrawdownDays = 0;
-  let currentDrawdownStart = 0;
+  let currentDrawdownStartDate = data[0].date;
 
   for (let i = 0; i < data.length; i++) {
     const point = data[i];
 
     if (point.close > peak) {
-      // New peak
-      const drawdownDays = i - currentDrawdownStart;
+      // New peak - calculate calendar days of the completed drawdown period
+      const drawdownDays = Math.ceil(
+        (new Date(point.date).getTime() - new Date(currentDrawdownStartDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
       if (drawdownDays > longestDrawdownDays) {
         longestDrawdownDays = drawdownDays;
       }
       peak = point.close;
       peakDate = point.date;
-      currentDrawdownStart = i;
+      currentDrawdownStartDate = point.date;
     } else {
       // In drawdown
       const drawdown = ((peak - point.close) / peak) * 100;
@@ -130,8 +132,11 @@ function calculateDrawdowns(data: StooqDataPoint[]): {
     }
   }
 
-  // Check if current period is the longest drawdown
-  const finalDrawdownDays = data.length - 1 - currentDrawdownStart;
+  // Check if current ongoing period is the longest drawdown (using calendar days)
+  const lastDate = data[data.length - 1].date;
+  const finalDrawdownDays = Math.ceil(
+    (new Date(lastDate).getTime() - new Date(currentDrawdownStartDate).getTime()) / (1000 * 60 * 60 * 24)
+  );
   if (finalDrawdownDays > longestDrawdownDays) {
     longestDrawdownDays = finalDrawdownDays;
   }
