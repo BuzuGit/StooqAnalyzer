@@ -211,15 +211,14 @@ export default function TrendFollowingSection({
     return calculateTrendFollowingAnalysis(data, riskFreeRate, commission);
   }, [data, riskFreeRate, commission]);
 
-  if (!analysis || analysis.chartData.length === 0) {
-    return null;
-  }
-
-  const { chartData, drawdownData, buyHoldStats, trendFollowingStats, currentSignal, signalDates } =
-    analysis;
-
   // Calculate signal statistics (memoized for efficiency)
+  // Must be before early return to satisfy React hooks rules
   const signalStats = useMemo(() => {
+    if (!analysis || analysis.chartData.length === 0) {
+      return { buySignals: 0, sellSignals: 0, successfulRoundTrips: 0, totalRoundTrips: 0, successRate: null };
+    }
+
+    const { signalDates, chartData } = analysis;
     const buySignals = signalDates.filter(s => s.signal === 'BUY').length;
     const sellSignals = signalDates.filter(s => s.signal === 'SELL').length;
 
@@ -251,7 +250,14 @@ export default function TrendFollowingSection({
       : null;
 
     return { buySignals, sellSignals, successfulRoundTrips, totalRoundTrips, successRate };
-  }, [signalDates, chartData]);
+  }, [analysis]);
+
+  if (!analysis || analysis.chartData.length === 0) {
+    return null;
+  }
+
+  const { chartData, drawdownData, buyHoldStats, trendFollowingStats, currentSignal, signalDates } =
+    analysis;
 
   // Calculate date range for formatting
   const firstDate = chartData[0].date;
