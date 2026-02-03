@@ -204,7 +204,7 @@ export default function TrendFollowingSection({
 }: TrendFollowingSectionProps) {
   // Local state for configurable parameters
   const [riskFreeRate, setRiskFreeRate] = useState(0.02);
-  const [commission, setCommission] = useState(0);
+  const [commission, setCommission] = useState(0.002);
 
   // Calculate analysis with current parameters
   const analysis = useMemo(() => {
@@ -217,6 +217,41 @@ export default function TrendFollowingSection({
 
   const { chartData, drawdownData, buyHoldStats, trendFollowingStats, currentSignal, signalDates } =
     analysis;
+
+  // Calculate signal statistics (memoized for efficiency)
+  const signalStats = useMemo(() => {
+    const buySignals = signalDates.filter(s => s.signal === 'BUY').length;
+    const sellSignals = signalDates.filter(s => s.signal === 'SELL').length;
+
+    // Calculate success rate (SELL→BUY pairs where buy price < sell price)
+    let successfulRoundTrips = 0;
+    let totalRoundTrips = 0;
+    let lastSellPrice: number | null = null;
+
+    // Build a date->price map for O(1) lookups instead of O(n) find()
+    const priceByDate = new Map(chartData.map(d => [d.date, d.buyHold]));
+
+    for (const signal of signalDates) {
+      const price = priceByDate.get(signal.date);
+      if (price === undefined) continue;
+
+      if (signal.signal === 'SELL') {
+        lastSellPrice = price;
+      } else if (signal.signal === 'BUY' && lastSellPrice !== null) {
+        totalRoundTrips++;
+        if (price < lastSellPrice) {
+          successfulRoundTrips++;
+        }
+        lastSellPrice = null;
+      }
+    }
+
+    const successRate = totalRoundTrips > 0
+      ? (successfulRoundTrips / totalRoundTrips) * 100
+      : null;
+
+    return { buySignals, sellSignals, successfulRoundTrips, totalRoundTrips, successRate };
+  }, [signalDates, chartData]);
 
   // Calculate date range for formatting
   const firstDate = chartData[0].date;
@@ -275,50 +310,19 @@ export default function TrendFollowingSection({
           </span>
         </p>
         {/* Signal Statistics */}
-        {(() => {
-          const buySignals = signalDates.filter(s => s.signal === 'BUY').length;
-          const sellSignals = signalDates.filter(s => s.signal === 'SELL').length;
-
-          // Calculate success rate (SELL→BUY pairs where buy price < sell price)
-          let successfulRoundTrips = 0;
-          let totalRoundTrips = 0;
-          let lastSellPrice: number | null = null;
-
-          for (const signal of signalDates) {
-            const dataPoint = chartData.find(d => d.date === signal.date);
-            if (!dataPoint) continue;
-
-            if (signal.signal === 'SELL') {
-              lastSellPrice = dataPoint.buyHold;
-            } else if (signal.signal === 'BUY' && lastSellPrice !== null) {
-              totalRoundTrips++;
-              if (dataPoint.buyHold < lastSellPrice) {
-                successfulRoundTrips++;
-              }
-              lastSellPrice = null;
-            }
-          }
-
-          const successRate = totalRoundTrips > 0
-            ? (successfulRoundTrips / totalRoundTrips) * 100
-            : null;
-
-          return (
-            <div className="flex flex-wrap gap-4 mt-2 text-sm">
-              <div className="font-medium text-gray-700">
-                Signals: <span className="text-green-600">{buySignals} buy</span>, <span className="text-red-600">{sellSignals} sell</span>
-              </div>
-              {successRate !== null && (
-                <div className="font-medium text-gray-700">
-                  Success rate: {successRate.toFixed(0)}%
-                  <span className="text-gray-500 font-normal ml-1">
-                    ({successfulRoundTrips} of {totalRoundTrips})
-                  </span>
-                </div>
-              )}
+        <div className="flex flex-wrap gap-4 mt-2 text-sm">
+          <div className="font-medium text-gray-700">
+            Signals: <span className="text-green-600">{signalStats.buySignals} buy</span>, <span className="text-red-600">{signalStats.sellSignals} sell</span>
+          </div>
+          {signalStats.successRate !== null && (
+            <div className="font-medium text-gray-700">
+              Success rate: {signalStats.successRate.toFixed(0)}%
+              <span className="text-gray-500 font-normal ml-1">
+                ({signalStats.successfulRoundTrips} of {signalStats.totalRoundTrips})
+              </span>
             </div>
-          );
-        })()}
+          )}
+        </div>
       </div>
 
       {/* Parameter Controls */}
