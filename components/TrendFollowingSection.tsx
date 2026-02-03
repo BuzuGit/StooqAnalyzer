@@ -271,9 +271,54 @@ export default function TrendFollowingSection({
         <p className="text-sm text-gray-500 mt-1">
           Growth of $1 comparing passive investing to a 10-month moving average strategy.
           <span className="text-gray-400 ml-1">
-            Note: Analysis starts after 10 months (required to calculate initial SMA), so dates may differ from main statistics.
+            Note: Analysis starts after 10 months (required to calculate initial SMA).
           </span>
         </p>
+        {/* Signal Statistics */}
+        {(() => {
+          const buySignals = signalDates.filter(s => s.signal === 'BUY').length;
+          const sellSignals = signalDates.filter(s => s.signal === 'SELL').length;
+
+          // Calculate success rate (SELL→BUY pairs where buy price < sell price)
+          let successfulRoundTrips = 0;
+          let totalRoundTrips = 0;
+          let lastSellPrice: number | null = null;
+
+          for (const signal of signalDates) {
+            const dataPoint = chartData.find(d => d.date === signal.date);
+            if (!dataPoint) continue;
+
+            if (signal.signal === 'SELL') {
+              lastSellPrice = dataPoint.buyHold;
+            } else if (signal.signal === 'BUY' && lastSellPrice !== null) {
+              totalRoundTrips++;
+              if (dataPoint.buyHold < lastSellPrice) {
+                successfulRoundTrips++;
+              }
+              lastSellPrice = null;
+            }
+          }
+
+          const successRate = totalRoundTrips > 0
+            ? (successfulRoundTrips / totalRoundTrips) * 100
+            : null;
+
+          return (
+            <div className="flex flex-wrap gap-4 mt-2 text-sm">
+              <div className="font-medium text-gray-700">
+                Signals: <span className="text-green-600">{buySignals} buy</span>, <span className="text-red-600">{sellSignals} sell</span>
+              </div>
+              {successRate !== null && (
+                <div className="font-medium text-gray-700">
+                  Success rate: {successRate.toFixed(0)}%
+                  <span className="text-gray-500 font-normal ml-1">
+                    ({successfulRoundTrips} of {totalRoundTrips})
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Parameter Controls */}
