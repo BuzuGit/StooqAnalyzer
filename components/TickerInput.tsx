@@ -31,6 +31,7 @@ export default function TickerInput({ onSubmit, isLoading }: TickerInputProps) {
     { label: 'EIMI.UK', value: 'EIMI.UK' },
     { label: 'CSPX.UK', value: 'CSPX.UK' },
     { label: 'VDTA.UK', value: 'VDTA.UK' },
+    { label: 'ETFBM40TR.PL', value: 'ETFBM40TR.PL' },
   ];
 
   return (
