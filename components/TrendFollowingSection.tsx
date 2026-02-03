@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import {
   ComposedChart,
   Area,
@@ -13,12 +14,43 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts';
-import { TrendFollowingAnalysis, TrendSignal } from '@/lib/types';
+import { StooqDataPoint, TrendSignal } from '@/lib/types';
+import { calculateTrendFollowingAnalysis } from '@/lib/statistics';
 
 interface TrendFollowingSectionProps {
-  analysis: TrendFollowingAnalysis;
+  data: StooqDataPoint[];  // Raw price data
   ticker: string;
 }
+
+// Risk-free rate options (0% to 5%, 0.5% increments)
+const RISK_FREE_RATE_OPTIONS = [
+  { value: 0.00, label: '0.0%' },
+  { value: 0.005, label: '0.5%' },
+  { value: 0.01, label: '1.0%' },
+  { value: 0.015, label: '1.5%' },
+  { value: 0.02, label: '2.0%' },
+  { value: 0.025, label: '2.5%' },
+  { value: 0.03, label: '3.0%' },
+  { value: 0.035, label: '3.5%' },
+  { value: 0.04, label: '4.0%' },
+  { value: 0.045, label: '4.5%' },
+  { value: 0.05, label: '5.0%' },
+];
+
+// Commission options (0% to 0.5%, 0.05% increments)
+const COMMISSION_OPTIONS = [
+  { value: 0.00, label: '0.00%' },
+  { value: 0.0005, label: '0.05%' },
+  { value: 0.001, label: '0.10%' },
+  { value: 0.0015, label: '0.15%' },
+  { value: 0.002, label: '0.20%' },
+  { value: 0.0025, label: '0.25%' },
+  { value: 0.003, label: '0.30%' },
+  { value: 0.0035, label: '0.35%' },
+  { value: 0.004, label: '0.40%' },
+  { value: 0.0045, label: '0.45%' },
+  { value: 0.005, label: '0.50%' },
+];
 
 // Format date for X axis
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -167,15 +199,24 @@ function StatRow({
 }
 
 export default function TrendFollowingSection({
-  analysis,
+  data,
   ticker,
 }: TrendFollowingSectionProps) {
-  const { chartData, drawdownData, buyHoldStats, trendFollowingStats, currentSignal, signalDates } =
-    analysis;
+  // Local state for configurable parameters
+  const [riskFreeRate, setRiskFreeRate] = useState(0.02);
+  const [commission, setCommission] = useState(0);
 
-  if (chartData.length === 0) {
+  // Calculate analysis with current parameters
+  const analysis = useMemo(() => {
+    return calculateTrendFollowingAnalysis(data, riskFreeRate, commission);
+  }, [data, riskFreeRate, commission]);
+
+  if (!analysis || analysis.chartData.length === 0) {
     return null;
   }
+
+  const { chartData, drawdownData, buyHoldStats, trendFollowingStats, currentSignal, signalDates } =
+    analysis;
 
   // Calculate date range for formatting
   const firstDate = chartData[0].date;
@@ -233,6 +274,38 @@ export default function TrendFollowingSection({
             Note: Analysis starts after 10 months (required to calculate initial SMA), so dates may differ from main statistics.
           </span>
         </p>
+      </div>
+
+      {/* Parameter Controls */}
+      <div className="flex flex-wrap gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Risk-free rate:</label>
+          <select
+            value={riskFreeRate}
+            onChange={(e) => setRiskFreeRate(parseFloat(e.target.value))}
+            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {RISK_FREE_RATE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Commission:</label>
+          <select
+            value={commission}
+            onChange={(e) => setCommission(parseFloat(e.target.value))}
+            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {COMMISSION_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Legend */}
@@ -485,7 +558,7 @@ export default function TrendFollowingSection({
             </div>
             <div className="text-xs text-gray-500 mt-2">
               Strategy earns{' '}
-              {currentSignal === 'BUY' ? 'market returns' : '2% annual (risk-free)'} when{' '}
+              {currentSignal === 'BUY' ? 'market returns' : `${(riskFreeRate * 100).toFixed(1)}% annual (risk-free)`} when{' '}
               {currentSignal === 'BUY' ? 'invested' : 'out'}
             </div>
           </div>
@@ -495,7 +568,8 @@ export default function TrendFollowingSection({
       {/* Footer note */}
       <div className="mt-4 text-xs text-gray-500">
         Strategy: Buy when price {'>'} 10-month SMA at month-end, sell when price {'<'} 10-month
-        SMA. When out of market, earns 2% annual risk-free rate.
+        SMA. When out of market, earns {(riskFreeRate * 100).toFixed(1)}% annual risk-free rate.
+        {commission > 0 && ` Commission of ${(commission * 100).toFixed(2)}% applied on each signal change.`}
       </div>
     </div>
   );

@@ -686,9 +686,6 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
 // TREND FOLLOWING STRATEGY CALCULATIONS
 // ============================================
 
-const CASH_RETURN_ANNUAL = 0.02; // 2% annual risk-free rate when out of market
-const DAILY_CASH_RETURN = Math.pow(1 + CASH_RETURN_ANNUAL, 1 / TRADING_DAYS_PER_YEAR) - 1;
-
 /**
  * Extract the last trading day price for each month
  */
@@ -760,11 +757,15 @@ function calculateMonthlySignals(monthlyPrices: MonthlyDataPoint[]): MonthlyData
  */
 function calculateTrendFollowingEquity(
   dailyData: StooqDataPoint[],
-  monthlySignals: MonthlyDataPoint[]
+  monthlySignals: MonthlyDataPoint[],
+  riskFreeRate: number,
+  commission: number
 ): {
   chartData: TrendFollowingChartPoint[];
   signalDates: { date: string; signal: TrendSignal }[];
 } {
+  // Calculate daily cash return from annual risk-free rate
+  const dailyCashReturn = Math.pow(1 + riskFreeRate, 1 / TRADING_DAYS_PER_YEAR) - 1;
   if (dailyData.length === 0 || monthlySignals.length < 10) {
     return { chartData: [], signalDates: [] };
   }
@@ -834,8 +835,10 @@ function calculateTrendFollowingEquity(
       if (prevMonthSignal) {
         currentSignal = prevMonthSignal.signal;
 
-        // Record signal change
+        // Record signal change and apply commission
         if (currentSignal !== lastSignal) {
+          // Apply commission on signal change
+          trendFollowingValue *= (1 - commission);
           signalDates.push({ date: day.date, signal: currentSignal });
           lastSignal = currentSignal;
         }
@@ -855,7 +858,7 @@ function calculateTrendFollowingEquity(
         trendFollowingValue = trendFollowingValue * (1 + dailyReturn);
       } else {
         // Out of market: earn daily cash rate
-        trendFollowingValue = trendFollowingValue * (1 + DAILY_CASH_RETURN);
+        trendFollowingValue = trendFollowingValue * (1 + dailyCashReturn);
       }
     }
 
@@ -926,7 +929,8 @@ function calculateTrendFollowingDrawdowns(
  */
 function calculateStrategyStatistics(
   equityCurve: number[],
-  dates: string[]
+  dates: string[],
+  riskFreeRate: number
 ): StrategyStatistics {
   if (equityCurve.length < 2) {
     return {
@@ -984,7 +988,7 @@ function calculateStrategyStatistics(
   // Sharpe ratio
   const annualizedReturn = cagr / 100;
   const sharpeRatio =
-    annualizedStd > 0 ? (annualizedReturn - RISK_FREE_RATE) / (annualizedStd / 100) : 0;
+    annualizedStd > 0 ? (annualizedReturn - riskFreeRate) / (annualizedStd / 100) : 0;
 
   return {
     finalAmount,
@@ -1001,7 +1005,9 @@ function calculateStrategyStatistics(
  * Main function to calculate complete trend following analysis
  */
 export function calculateTrendFollowingAnalysis(
-  data: StooqDataPoint[]
+  data: StooqDataPoint[],
+  riskFreeRate: number = 0.02,  // Default 2%
+  commission: number = 0        // Default 0%
 ): TrendFollowingAnalysis | null {
   if (data.length < 252) {
     // Need at least ~1 year of data
@@ -1020,7 +1026,7 @@ export function calculateTrendFollowingAnalysis(
   const monthlySignals = calculateMonthlySignals(monthlyPrices);
 
   // Step 3: Build daily equity curves
-  const { chartData, signalDates } = calculateTrendFollowingEquity(data, monthlySignals);
+  const { chartData, signalDates } = calculateTrendFollowingEquity(data, monthlySignals, riskFreeRate, commission);
 
   if (chartData.length === 0) {
     return null;
@@ -1034,8 +1040,8 @@ export function calculateTrendFollowingAnalysis(
   const trendFollowingEquity = chartData.map((p) => p.trendFollowing);
   const dates = chartData.map((p) => p.date);
 
-  const buyHoldStats = calculateStrategyStatistics(buyHoldEquity, dates);
-  const trendFollowingStats = calculateStrategyStatistics(trendFollowingEquity, dates);
+  const buyHoldStats = calculateStrategyStatistics(buyHoldEquity, dates, riskFreeRate);
+  const trendFollowingStats = calculateStrategyStatistics(trendFollowingEquity, dates, riskFreeRate);
 
   // Current signal
   const currentSignal = chartData[chartData.length - 1].signal || 'SELL';

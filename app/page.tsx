@@ -16,9 +16,7 @@ import {
   getDateRange,
   calculateReturnsTable,
   YearlyData,
-  calculateTrendFollowingAnalysis,
 } from '@/lib/statistics';
-import { TrendFollowingAnalysis } from '@/lib/types';
 
 export default function Home() {
   // Raw data from API (never filtered)
@@ -71,12 +69,6 @@ export default function Home() {
     if (filteredTickersData.length !== 1) return [];
     const result = calculateReturnsTable(filteredTickersData[0].data);
     return result.years;
-  }, [filteredTickersData]);
-
-  // Calculate trend following analysis (for single ticker only)
-  const trendFollowingAnalysis = useMemo<TrendFollowingAnalysis | null>(() => {
-    if (filteredTickersData.length !== 1) return null;
-    return calculateTrendFollowingAnalysis(filteredTickersData[0].data);
   }, [filteredTickersData]);
 
   const handleSubmit = async (tickers: string[]) => {
@@ -186,9 +178,9 @@ export default function Home() {
         </div>
 
         {/* Trend Following Section - Only for single ticker with sufficient data */}
-        {tickers.length === 1 && trendFollowingAnalysis && (
+        {tickers.length === 1 && filteredTickersData[0].data.length >= 252 && (
           <TrendFollowingSection
-            analysis={trendFollowingAnalysis}
+            data={filteredTickersData[0].data}
             ticker={tickers[0]}
           />
         )}
