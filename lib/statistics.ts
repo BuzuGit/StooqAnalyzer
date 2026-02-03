@@ -1,4 +1,15 @@
-import { StooqDataPoint, Statistics, ChartDataPoint, TickerData } from './types';
+import {
+  StooqDataPoint,
+  Statistics,
+  ChartDataPoint,
+  TickerData,
+  TrendSignal,
+  MonthlyDataPoint,
+  TrendFollowingChartPoint,
+  TrendFollowingDrawdownPoint,
+  StrategyStatistics,
+  TrendFollowingAnalysis,
+} from './types';
 
 const RISK_FREE_RATE = 0.02; // 2% annual risk-free rate assumption
 const TRADING_DAYS_PER_YEAR = 252;
@@ -669,4 +680,372 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
   }
 
   return { years: result };
+}
+
+// ============================================
+// TREND FOLLOWING STRATEGY CALCULATIONS
+// ============================================
+
+const CASH_RETURN_ANNUAL = 0.02; // 2% annual risk-free rate when out of market
+const DAILY_CASH_RETURN = Math.pow(1 + CASH_RETURN_ANNUAL, 1 / TRADING_DAYS_PER_YEAR) - 1;
+
+/**
+ * Extract the last trading day price for each month
+ */
+function extractMonthlyEndPrices(data: StooqDataPoint[]): MonthlyDataPoint[] {
+  if (data.length === 0) return [];
+
+  // Sort data chronologically
+  const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Group by year-month and get last price
+  const monthlyMap = new Map<string, { date: string; price: number }>();
+
+  for (const point of sortedData) {
+    const yearMonth = point.date.substring(0, 7); // "YYYY-MM"
+    monthlyMap.set(yearMonth, { date: point.date, price: point.close });
+  }
+
+  // Convert to array sorted by date
+  const monthlyPrices = Array.from(monthlyMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, value]) => value);
+
+  return monthlyPrices.map((mp) => ({
+    date: mp.date,
+    price: mp.price,
+    sma10: null,
+    signal: null,
+  }));
+}
+
+/**
+ * Calculate 10-month SMA and generate BUY/SELL signals
+ */
+function calculateMonthlySignals(monthlyPrices: MonthlyDataPoint[]): MonthlyDataPoint[] {
+  const result: MonthlyDataPoint[] = [];
+
+  for (let i = 0; i < monthlyPrices.length; i++) {
+    const current = monthlyPrices[i];
+
+    // Calculate 10-month SMA (need at least 10 months of data)
+    let sma10: number | null = null;
+    if (i >= 9) {
+      let sum = 0;
+      for (let j = i - 9; j <= i; j++) {
+        sum += monthlyPrices[j].price;
+      }
+      sma10 = sum / 10;
+    }
+
+    // Generate signal: BUY if price > SMA, SELL if price < SMA
+    let signal: TrendSignal | null = null;
+    if (sma10 !== null) {
+      signal = current.price > sma10 ? 'BUY' : 'SELL';
+    }
+
+    result.push({
+      date: current.date,
+      price: current.price,
+      sma10,
+      signal,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Build daily equity curves for both Buy & Hold and Trend Following strategies
+ */
+function calculateTrendFollowingEquity(
+  dailyData: StooqDataPoint[],
+  monthlySignals: MonthlyDataPoint[]
+): {
+  chartData: TrendFollowingChartPoint[];
+  signalDates: { date: string; signal: TrendSignal }[];
+} {
+  if (dailyData.length === 0 || monthlySignals.length < 10) {
+    return { chartData: [], signalDates: [] };
+  }
+
+  // Sort daily data chronologically
+  const sortedDaily = [...dailyData].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Create a map of month-end signals
+  const signalMap = new Map<string, { signal: TrendSignal; sma10: number }>();
+  for (const mp of monthlySignals) {
+    if (mp.signal !== null && mp.sma10 !== null) {
+      const yearMonth = mp.date.substring(0, 7);
+      signalMap.set(yearMonth, { signal: mp.signal, sma10: mp.sma10 });
+    }
+  }
+
+  // Find the first date where we have a signal (need 10 months of history)
+  const firstSignalDate = monthlySignals.find((mp) => mp.signal !== null)?.date;
+  if (!firstSignalDate) {
+    return { chartData: [], signalDates: [] };
+  }
+
+  // Filter daily data to start from first signal date
+  const startIndex = sortedDaily.findIndex((d) => d.date >= firstSignalDate);
+  if (startIndex === -1) {
+    return { chartData: [], signalDates: [] };
+  }
+
+  const relevantDaily = sortedDaily.slice(startIndex);
+  if (relevantDaily.length === 0) {
+    return { chartData: [], signalDates: [] };
+  }
+
+  const chartData: TrendFollowingChartPoint[] = [];
+  const signalDates: { date: string; signal: TrendSignal }[] = [];
+
+  // Initialize both strategies at $1
+  let buyHoldValue = 1;
+  let trendFollowingValue = 1;
+  const basePrice = relevantDaily[0].close;
+  let prevPrice = basePrice;
+
+  // Get initial signal from the month before or same month
+  let currentSignal: TrendSignal = 'SELL'; // Default to out of market
+  const firstDayMonth = relevantDaily[0].date.substring(0, 7);
+
+  // Look for the most recent signal at or before the start date
+  for (const mp of monthlySignals) {
+    if (mp.signal !== null && mp.date <= relevantDaily[0].date) {
+      currentSignal = mp.signal;
+    }
+  }
+
+  let lastSignal = currentSignal;
+
+  for (let i = 0; i < relevantDaily.length; i++) {
+    const day = relevantDaily[i];
+    const currentMonth = day.date.substring(0, 7);
+
+    // Check if we need to update signal (at month end / start of new month)
+    // We look at the previous month's signal
+    const prevMonth = i > 0 ? relevantDaily[i - 1].date.substring(0, 7) : null;
+
+    if (prevMonth && prevMonth !== currentMonth) {
+      // New month started - check previous month's signal
+      const prevMonthSignal = signalMap.get(prevMonth);
+      if (prevMonthSignal) {
+        currentSignal = prevMonthSignal.signal;
+
+        // Record signal change
+        if (currentSignal !== lastSignal) {
+          signalDates.push({ date: day.date, signal: currentSignal });
+          lastSignal = currentSignal;
+        }
+      }
+    }
+
+    // Calculate daily returns
+    const dailyReturn = (day.close - prevPrice) / prevPrice;
+
+    // Buy & Hold: always tracks the asset
+    buyHoldValue = (day.close / basePrice);
+
+    // Trend Following: tracks asset if BUY signal, earns cash rate if SELL
+    if (i > 0) {
+      if (currentSignal === 'BUY') {
+        // Invested: track asset return
+        trendFollowingValue = trendFollowingValue * (1 + dailyReturn);
+      } else {
+        // Out of market: earn daily cash rate
+        trendFollowingValue = trendFollowingValue * (1 + DAILY_CASH_RETURN);
+      }
+    }
+
+    // Get SMA for this date (from the most recent month-end)
+    let sma10ForDate: number | null = null;
+    for (const mp of monthlySignals) {
+      if (mp.date <= day.date && mp.sma10 !== null) {
+        sma10ForDate = mp.sma10;
+      }
+    }
+
+    // Normalize SMA to same scale as price chart (growth of $1)
+    const normalizedSma10 = sma10ForDate !== null ? sma10ForDate / basePrice : null;
+
+    chartData.push({
+      date: day.date,
+      buyHold: buyHoldValue,
+      trendFollowing: trendFollowingValue,
+      sma10: normalizedSma10,
+      signal: currentSignal,
+    });
+
+    prevPrice = day.close;
+  }
+
+  return { chartData, signalDates };
+}
+
+/**
+ * Calculate drawdowns for both strategies
+ */
+function calculateTrendFollowingDrawdowns(
+  chartData: TrendFollowingChartPoint[]
+): TrendFollowingDrawdownPoint[] {
+  if (chartData.length === 0) return [];
+
+  const drawdownData: TrendFollowingDrawdownPoint[] = [];
+
+  let buyHoldPeak = chartData[0].buyHold;
+  let trendFollowingPeak = chartData[0].trendFollowing;
+
+  for (const point of chartData) {
+    // Update peaks
+    if (point.buyHold > buyHoldPeak) {
+      buyHoldPeak = point.buyHold;
+    }
+    if (point.trendFollowing > trendFollowingPeak) {
+      trendFollowingPeak = point.trendFollowing;
+    }
+
+    // Calculate drawdowns (as negative percentages)
+    const buyHoldDrawdown = -((buyHoldPeak - point.buyHold) / buyHoldPeak) * 100;
+    const trendFollowingDrawdown =
+      -((trendFollowingPeak - point.trendFollowing) / trendFollowingPeak) * 100;
+
+    drawdownData.push({
+      date: point.date,
+      buyHoldDrawdown,
+      trendFollowingDrawdown,
+    });
+  }
+
+  return drawdownData;
+}
+
+/**
+ * Calculate strategy statistics (CAGR, Sharpe, etc.)
+ */
+function calculateStrategyStatistics(
+  equityCurve: number[],
+  dates: string[]
+): StrategyStatistics {
+  if (equityCurve.length < 2) {
+    return {
+      finalAmount: 1,
+      cagr: 0,
+      totalReturn: 0,
+      annualizedStd: 0,
+      maxDrawdown: 0,
+      currentDrawdown: 0,
+      sharpeRatio: 0,
+    };
+  }
+
+  const finalAmount = equityCurve[equityCurve.length - 1];
+  const totalReturn = (finalAmount - 1) * 100;
+
+  // Calculate years for CAGR
+  const startDate = new Date(dates[0]);
+  const endDate = new Date(dates[dates.length - 1]);
+  const years = (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  const cagr = years > 0 ? (Math.pow(finalAmount, 1 / years) - 1) * 100 : 0;
+
+  // Calculate daily returns for std dev
+  const dailyReturns: number[] = [];
+  for (let i = 1; i < equityCurve.length; i++) {
+    dailyReturns.push((equityCurve[i] - equityCurve[i - 1]) / equityCurve[i - 1]);
+  }
+
+  // Annualized standard deviation
+  let annualizedStd = 0;
+  if (dailyReturns.length >= 2) {
+    const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+    const squaredDiffs = dailyReturns.map((r) => Math.pow(r - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (dailyReturns.length - 1);
+    const dailyStd = Math.sqrt(variance);
+    annualizedStd = dailyStd * Math.sqrt(TRADING_DAYS_PER_YEAR) * 100;
+  }
+
+  // Max drawdown and current drawdown
+  let peak = equityCurve[0];
+  let maxDrawdown = 0;
+  for (const value of equityCurve) {
+    if (value > peak) {
+      peak = value;
+    }
+    const drawdown = ((peak - value) / peak) * 100;
+    if (drawdown > maxDrawdown) {
+      maxDrawdown = drawdown;
+    }
+  }
+
+  const currentPeak = Math.max(...equityCurve);
+  const currentDrawdown = ((currentPeak - finalAmount) / currentPeak) * 100;
+
+  // Sharpe ratio
+  const annualizedReturn = cagr / 100;
+  const sharpeRatio =
+    annualizedStd > 0 ? (annualizedReturn - RISK_FREE_RATE) / (annualizedStd / 100) : 0;
+
+  return {
+    finalAmount,
+    cagr,
+    totalReturn,
+    annualizedStd,
+    maxDrawdown,
+    currentDrawdown,
+    sharpeRatio,
+  };
+}
+
+/**
+ * Main function to calculate complete trend following analysis
+ */
+export function calculateTrendFollowingAnalysis(
+  data: StooqDataPoint[]
+): TrendFollowingAnalysis | null {
+  if (data.length < 252) {
+    // Need at least ~1 year of data
+    return null;
+  }
+
+  // Step 1: Extract monthly end prices
+  const monthlyPrices = extractMonthlyEndPrices(data);
+
+  // Need at least 12 months for meaningful analysis
+  if (monthlyPrices.length < 12) {
+    return null;
+  }
+
+  // Step 2: Calculate monthly signals with 10-month SMA
+  const monthlySignals = calculateMonthlySignals(monthlyPrices);
+
+  // Step 3: Build daily equity curves
+  const { chartData, signalDates } = calculateTrendFollowingEquity(data, monthlySignals);
+
+  if (chartData.length === 0) {
+    return null;
+  }
+
+  // Step 4: Calculate drawdowns
+  const drawdownData = calculateTrendFollowingDrawdowns(chartData);
+
+  // Step 5: Calculate statistics for both strategies
+  const buyHoldEquity = chartData.map((p) => p.buyHold);
+  const trendFollowingEquity = chartData.map((p) => p.trendFollowing);
+  const dates = chartData.map((p) => p.date);
+
+  const buyHoldStats = calculateStrategyStatistics(buyHoldEquity, dates);
+  const trendFollowingStats = calculateStrategyStatistics(trendFollowingEquity, dates);
+
+  // Current signal
+  const currentSignal = chartData[chartData.length - 1].signal || 'SELL';
+
+  return {
+    chartData,
+    drawdownData,
+    buyHoldStats,
+    trendFollowingStats,
+    currentSignal,
+    signalDates,
+  };
 }

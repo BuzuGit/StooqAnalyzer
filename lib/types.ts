@@ -61,3 +61,46 @@ export interface ApiResponse {
   data?: TickerData[];
   error?: string;
 }
+
+// Trend Following Strategy Types
+export type TrendSignal = 'BUY' | 'SELL';
+
+export interface MonthlyDataPoint {
+  date: string;
+  price: number;
+  sma10: number | null;
+  signal: TrendSignal | null;
+}
+
+export interface TrendFollowingChartPoint {
+  date: string;
+  buyHold: number;
+  trendFollowing: number;
+  sma10: number | null;
+  signal?: TrendSignal;
+}
+
+export interface TrendFollowingDrawdownPoint {
+  date: string;
+  buyHoldDrawdown: number;
+  trendFollowingDrawdown: number;
+}
+
+export interface StrategyStatistics {
+  finalAmount: number;
+  cagr: number;
+  totalReturn: number;
+  annualizedStd: number;
+  maxDrawdown: number;
+  currentDrawdown: number;
+  sharpeRatio: number;
+}
+
+export interface TrendFollowingAnalysis {
+  chartData: TrendFollowingChartPoint[];
+  drawdownData: TrendFollowingDrawdownPoint[];
+  buyHoldStats: StrategyStatistics;
+  trendFollowingStats: StrategyStatistics;
+  currentSignal: TrendSignal;
+  signalDates: { date: string; signal: TrendSignal }[];
+}

@@ -5,6 +5,7 @@ import TickerInput from '@/components/TickerInput';
 import PriceChart from '@/components/PriceChart';
 import StatsPanel from '@/components/StatsPanel';
 import DateRangeFilter from '@/components/DateRangeFilter';
+import TrendFollowingSection from '@/components/TrendFollowingSection';
 import AnnualReturnsChart from '@/components/AnnualReturnsChart';
 import ReturnsTable from '@/components/ReturnsTable';
 import { TickerData, ChartDataPoint, Statistics, ApiResponse } from '@/lib/types';
@@ -15,7 +16,9 @@ import {
   getDateRange,
   calculateReturnsTable,
   YearlyData,
+  calculateTrendFollowingAnalysis,
 } from '@/lib/statistics';
+import { TrendFollowingAnalysis } from '@/lib/types';
 
 export default function Home() {
   // Raw data from API (never filtered)
@@ -68,6 +71,12 @@ export default function Home() {
     if (filteredTickersData.length !== 1) return [];
     const result = calculateReturnsTable(filteredTickersData[0].data);
     return result.years;
+  }, [filteredTickersData]);
+
+  // Calculate trend following analysis (for single ticker only)
+  const trendFollowingAnalysis = useMemo<TrendFollowingAnalysis | null>(() => {
+    if (filteredTickersData.length !== 1) return null;
+    return calculateTrendFollowingAnalysis(filteredTickersData[0].data);
   }, [filteredTickersData]);
 
   const handleSubmit = async (tickers: string[]) => {
@@ -175,6 +184,14 @@ export default function Home() {
             <StatsPanel statistics={statistics} isLoading={isLoading} />
           </div>
         </div>
+
+        {/* Trend Following Section - Only for single ticker with sufficient data */}
+        {tickers.length === 1 && trendFollowingAnalysis && (
+          <TrendFollowingSection
+            analysis={trendFollowingAnalysis}
+            ticker={tickers[0]}
+          />
+        )}
 
         {/* Annual Returns Bar Chart - Only for single ticker */}
         {tickers.length === 1 && returnsTableData.length > 0 && (
