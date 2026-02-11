@@ -76,8 +76,7 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
     const max = Math.max(...values);
     const min = Math.min(...values);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const latest = values[values.length - 1];
-    return { max, min, avg, latest };
+    return { max, min, avg };
   }, [rollingData]);
 
   if (rollingData.length === 0 || !stats) {
@@ -146,7 +145,7 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={rollingData}
-            margin={{ top: 10, right: 55, left: -15, bottom: 0 }}
+            margin={{ top: 10, right: 30, left: -15, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
@@ -177,9 +176,10 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
             >
               <Label
                 value={`Max: ${stats.max.toFixed(1)}%`}
-                position="right"
+                position="insideTopRight"
                 fill="#16a34a"
                 fontSize={11}
+                fontWeight={500}
               />
             </ReferenceLine>
 
@@ -192,9 +192,10 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
             >
               <Label
                 value={`Avg: ${stats.avg.toFixed(1)}%`}
-                position="right"
+                position="insideTopRight"
                 fill="#f59e0b"
                 fontSize={11}
+                fontWeight={500}
               />
             </ReferenceLine>
 
@@ -207,9 +208,10 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
             >
               <Label
                 value={`Min: ${stats.min.toFixed(1)}%`}
-                position="right"
+                position="insideBottomRight"
                 fill="#dc2626"
                 fontSize={11}
+                fontWeight={500}
               />
             </ReferenceLine>
 
