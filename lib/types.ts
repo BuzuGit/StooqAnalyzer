@@ -96,6 +96,14 @@ export interface StrategyStatistics {
   sharpeRatio: number;
 }
 
+export interface RollingReturnDataPoint {
+  date: string;        // current price date
+  rollingCagr: number; // CAGR as percentage (e.g. 7.2)
+  startDate: string;   // N years ago date (for tooltip)
+  startPrice: number;  // close price N years ago (for tooltip)
+  endPrice: number;    // close price on this date (for tooltip)
+}
+
 export interface TrendFollowingAnalysis {
   chartData: TrendFollowingChartPoint[];
   drawdownData: TrendFollowingDrawdownPoint[];

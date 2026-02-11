@@ -9,6 +9,7 @@ import {
   TrendFollowingDrawdownPoint,
   StrategyStatistics,
   TrendFollowingAnalysis,
+  RollingReturnDataPoint,
 } from './types';
 
 const RISK_FREE_RATE = 0.02; // 2% annual risk-free rate assumption
@@ -680,6 +681,58 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
   }
 
   return { years: result };
+}
+
+// ============================================
+// ROLLING RETURNS CALCULATION
+// ============================================
+
+export function calculateRollingReturns(
+  data: StooqDataPoint[],
+  rollingYears: number
+): RollingReturnDataPoint[] {
+  if (data.length === 0 || rollingYears < 1) return [];
+
+  const result: RollingReturnDataPoint[] = [];
+  let startIdx = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const endDate = new Date(data[i].date);
+    const targetDate = new Date(endDate);
+    targetDate.setFullYear(targetDate.getFullYear() - rollingYears);
+    const targetDateStr = targetDate.toISOString().slice(0, 10);
+
+    // Advance startIdx to find closest trading day on or before targetDate
+    while (startIdx < i - 1 && data[startIdx + 1].date <= targetDateStr) {
+      startIdx++;
+    }
+
+    // Skip if we don't have data going back far enough
+    if (data[startIdx].date > targetDateStr) continue;
+
+    const startPrice = data[startIdx].close;
+    const endPrice = data[i].close;
+    if (startPrice <= 0) continue;
+
+    // Calculate CAGR using actual year fraction
+    const startDateObj = new Date(data[startIdx].date);
+    const years = (endDate.getTime() - startDateObj.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (years <= 0) continue;
+
+    const cagr = rollingYears === 1
+      ? (endPrice / startPrice - 1) * 100
+      : (Math.pow(endPrice / startPrice, 1 / years) - 1) * 100;
+
+    result.push({
+      date: data[i].date,
+      rollingCagr: cagr,
+      startDate: data[startIdx].date,
+      startPrice,
+      endPrice,
+    });
+  }
+
+  return result;
 }
 
 // ============================================

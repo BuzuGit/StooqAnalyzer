@@ -6,6 +6,7 @@ import PriceChart from '@/components/PriceChart';
 import StatsPanel from '@/components/StatsPanel';
 import DateRangeFilter from '@/components/DateRangeFilter';
 import TrendFollowingSection from '@/components/TrendFollowingSection';
+import RollingReturnsChart from '@/components/RollingReturnsChart';
 import AnnualReturnsChart from '@/components/AnnualReturnsChart';
 import ReturnsTable from '@/components/ReturnsTable';
 import { TickerData, ChartDataPoint, Statistics, ApiResponse } from '@/lib/types';
@@ -188,6 +189,11 @@ export default function Home() {
         {/* Annual Returns Bar Chart - Only for single ticker */}
         {tickers.length === 1 && returnsTableData.length > 0 && (
           <AnnualReturnsChart data={returnsTableData} ticker={tickers[0]} />
+        )}
+
+        {/* Rolling Returns Chart - Only for single ticker with sufficient data */}
+        {tickers.length === 1 && filteredTickersData[0].data.length >= 252 && (
+          <RollingReturnsChart data={filteredTickersData[0].data} ticker={tickers[0]} />
         )}
 
         {/* Monthly Returns Table - Only for single ticker */}
