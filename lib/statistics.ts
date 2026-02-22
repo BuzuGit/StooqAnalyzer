@@ -456,6 +456,28 @@ export function calculateDrawdownSeries(data: StooqDataPoint[]): DrawdownSeries 
   };
 }
 
+// Simple Moving Average calculation for daily data
+export function calculateSMA(
+  data: StooqDataPoint[],
+  period: number
+): { date: string; sma: number | null }[] {
+  const result: { date: string; sma: number | null }[] = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push({ date: data[i].date, sma: null });
+    } else {
+      let sum = 0;
+      for (let j = i - period + 1; j <= i; j++) {
+        sum += data[j].close;
+      }
+      result.push({ date: data[i].date, sma: sum / period });
+    }
+  }
+
+  return result;
+}
+
 // Monthly/Annual returns table types and calculations
 export interface ReturnCalcDetail {
   returnValue: number | null;

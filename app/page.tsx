@@ -37,6 +37,7 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedTickerIndex, setFocusedTickerIndex] = useState(0);
 
   // Filter data based on selected date range
   const filteredTickersData = useMemo<TickerData[]>(() => {
@@ -65,12 +66,15 @@ export default function Home() {
     return normalizeDataForChart(filteredTickersData);
   }, [filteredTickersData]);
 
-  // Calculate returns table data (for single ticker only)
+  // Calculate returns table data for focused ticker
   const returnsTableData = useMemo<YearlyData[]>(() => {
-    if (filteredTickersData.length !== 1) return [];
-    const result = calculateReturnsTable(filteredTickersData[0].data);
+    if (filteredTickersData.length === 0) return [];
+    const idx = Math.min(focusedTickerIndex, filteredTickersData.length - 1);
+    const data = filteredTickersData[idx]?.data || [];
+    if (data.length === 0) return [];
+    const result = calculateReturnsTable(data);
     return result.years;
-  }, [filteredTickersData]);
+  }, [filteredTickersData, focusedTickerIndex]);
 
   const handleSubmit = async (tickers: string[]) => {
     setIsLoading(true);
@@ -86,6 +90,7 @@ export default function Home() {
 
       const data = result.data;
       setRawTickersData(data);
+      setFocusedTickerIndex(0);
 
       // Calculate available date range
       const { minDate, maxDate } = getDateRange(data);
@@ -110,6 +115,11 @@ export default function Home() {
 
   const tickers = filteredTickersData.map((td) => td.ticker);
   const hasData = rawTickersData.length > 0;
+
+  // Focused asset for detail sections (used in both single and multi-ticker modes)
+  const focusedIdx = Math.min(focusedTickerIndex, Math.max(tickers.length - 1, 0));
+  const focusedTicker = tickers[focusedIdx] || '';
+  const focusedData = filteredTickersData[focusedIdx]?.data || [];
 
   return (
     <main className="min-h-screen bg-gray-100">
@@ -169,6 +179,7 @@ export default function Home() {
               data={chartData}
               tickers={tickers}
               tickersData={filteredTickersData}
+              rawTickersData={rawTickersData}
             />
           </div>
 
@@ -178,27 +189,43 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Trend Following Section - Only for single ticker with sufficient data */}
-        {tickers.length === 1 && filteredTickersData[0].data.length >= 252 && (
+        {/* Focus asset selector - Only for multi-ticker */}
+        {tickers.length > 1 && (
+          <div className="mt-4 mb-2 flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Focus asset:</label>
+            <select
+              value={focusedTickerIndex}
+              onChange={(e) => setFocusedTickerIndex(Number(e.target.value))}
+              className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {tickers.map((t, i) => (
+                <option key={t} value={i}>{t}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Trend Following Section */}
+        {tickers.length >= 1 && focusedData.length >= 252 && (
           <TrendFollowingSection
-            data={filteredTickersData[0].data}
-            ticker={tickers[0]}
+            data={focusedData}
+            ticker={focusedTicker}
           />
         )}
 
-        {/* Annual Returns Bar Chart - Only for single ticker */}
-        {tickers.length === 1 && returnsTableData.length > 0 && (
-          <AnnualReturnsChart data={returnsTableData} ticker={tickers[0]} />
+        {/* Annual Returns Bar Chart */}
+        {tickers.length >= 1 && returnsTableData.length > 0 && (
+          <AnnualReturnsChart data={returnsTableData} ticker={focusedTicker} />
         )}
 
-        {/* Rolling Returns Chart - Only for single ticker with sufficient data */}
-        {tickers.length === 1 && filteredTickersData[0].data.length >= 252 && (
-          <RollingReturnsChart data={filteredTickersData[0].data} ticker={tickers[0]} />
+        {/* Rolling Returns Chart */}
+        {tickers.length >= 1 && focusedData.length >= 252 && (
+          <RollingReturnsChart data={focusedData} ticker={focusedTicker} />
         )}
 
-        {/* Monthly Returns Table - Only for single ticker */}
-        {tickers.length === 1 && returnsTableData.length > 0 && (
-          <ReturnsTable data={returnsTableData} ticker={tickers[0]} />
+        {/* Monthly Returns Table */}
+        {tickers.length >= 1 && returnsTableData.length > 0 && (
+          <ReturnsTable data={returnsTableData} ticker={focusedTicker} />
         )}
 
         {/* Footer Info */}
