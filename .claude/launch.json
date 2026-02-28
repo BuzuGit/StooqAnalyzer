@@ -4,8 +4,8 @@
     {
       "name": "dev",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "npx next dev -p 3003"],
-      "port": 3003
+      "runtimeArgs": ["/c", "npx next dev -p 3002"],
+      "port": 3002
     }
   ]
 }

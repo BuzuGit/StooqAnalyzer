@@ -478,6 +478,40 @@ export function calculateSMA(
   return result;
 }
 
+// Calculate distance from SMA as percentage
+export interface SMADistancePoint {
+  date: string;
+  distance: number; // actual distance — positive above SMA, negative below
+  above: number;    // positive distance (0 when below) — for extreme detection
+  below: number;    // negative distance (0 when above) — for extreme detection
+}
+
+export function calculateSMADistance(
+  data: StooqDataPoint[],
+  smaData: { date: string; sma: number | null }[]
+): SMADistancePoint[] {
+  const smaMap = new Map<string, number>();
+  for (const s of smaData) {
+    if (s.sma !== null) {
+      smaMap.set(s.date, s.sma);
+    }
+  }
+
+  const result: SMADistancePoint[] = [];
+  for (const point of data) {
+    const sma = smaMap.get(point.date);
+    if (sma === undefined) continue;
+    const distance = ((point.close - sma) / sma) * 100;
+    result.push({
+      date: point.date,
+      distance,
+      above: distance >= 0 ? distance : 0,
+      below: distance < 0 ? distance : 0,
+    });
+  }
+  return result;
+}
+
 // Monthly/Annual returns table types and calculations
 export interface ReturnCalcDetail {
   returnValue: number | null;
@@ -500,6 +534,48 @@ export interface YearlyData {
 
 export interface ReturnsTableData {
   years: YearlyData[];
+}
+
+export interface PeriodicReturnPoint {
+  label: string;
+  returnValue: number | null;
+}
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function flattenMonthlyReturns(years: YearlyData[]): PeriodicReturnPoint[] {
+  const result: PeriodicReturnPoint[] = [];
+  for (const y of years) {
+    const yr = y.year.toString().slice(-2);
+    for (let m = 0; m < 12; m++) {
+      const val = y.monthlyReturns[m];
+      if (val !== null) {
+        result.push({ label: `${MONTH_SHORT[m]}${yr}`, returnValue: val });
+      }
+    }
+  }
+  return result;
+}
+
+export function calculateQuarterlyReturns(years: YearlyData[]): PeriodicReturnPoint[] {
+  const result: PeriodicReturnPoint[] = [];
+  for (const y of years) {
+    const yr = y.year.toString().slice(-2);
+    for (let q = 0; q < 4; q++) {
+      const months = [q * 3, q * 3 + 1, q * 3 + 2];
+      const monthlyVals = months.map(m => y.monthlyReturns[m]);
+      // Need at least one non-null month in the quarter
+      const nonNull = monthlyVals.filter((v): v is number => v !== null);
+      if (nonNull.length === 0) continue;
+      // Compound the monthly returns
+      let compound = 1;
+      for (const r of nonNull) {
+        compound *= (1 + r / 100);
+      }
+      result.push({ label: `Q${q + 1} ${yr}`, returnValue: (compound - 1) * 100 });
+    }
+  }
+  return result;
 }
 
 export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData {

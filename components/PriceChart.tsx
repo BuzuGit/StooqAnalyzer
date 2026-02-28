@@ -16,8 +16,9 @@ import {
   Label,
 } from 'recharts';
 import { ChartDataPoint, TickerData } from '@/lib/types';
-import { findExtremes, calculateDrawdownSeries, calculateSMA } from '@/lib/statistics';
+import { findExtremes, calculateDrawdownSeries, calculateSMA, calculateSMADistance } from '@/lib/statistics';
 import DrawdownChart from './DrawdownChart';
+import SMADistanceChart from './SMADistanceChart';
 
 interface PriceChartProps {
   data: ChartDataPoint[];
@@ -114,6 +115,7 @@ function EndBubbles({
 export default function PriceChart({ data, tickers, tickersData, rawTickersData }: PriceChartProps) {
   const [show50SMA, setShow50SMA] = useState(false);
   const [show200SMA, setShow200SMA] = useState(false);
+  const [distanceSMAPeriod, setDistanceSMAPeriod] = useState<50 | 200>(200);
 
   const isSingleTicker = tickers.length === 1;
   const primaryTicker = tickers[0];
@@ -157,6 +159,13 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
       return newPoint;
     });
   }, [data, rawPrimaryData, isSingleTicker, show50SMA, show200SMA]);
+
+  // Calculate SMA distance data for the distance chart
+  const smaDistanceData = useMemo(() => {
+    if (!isSingleTicker || primaryData.length === 0) return [];
+    const smaData = calculateSMA(rawPrimaryData, distanceSMAPeriod);
+    return calculateSMADistance(primaryData, smaData);
+  }, [isSingleTicker, primaryData, rawPrimaryData, distanceSMAPeriod]);
 
   // Calculate drawdown series for multi-ticker mode
   const multiDrawdownData = useMemo(() => {
@@ -533,6 +542,19 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           tickCount={tickCount}
           yearlyTicks={yearlyTicks}
           multiData={multiDrawdownData}
+        />
+      )}
+
+      {/* SMA Distance Chart - single ticker only */}
+      {isSingleTicker && smaDistanceData.length > 0 && (
+        <SMADistanceChart
+          data={smaDistanceData}
+          isShortRange={isShortRange}
+          isLongRange={isLongRange}
+          tickCount={tickCount}
+          yearlyTicks={yearlyTicks}
+          smaPeriod={distanceSMAPeriod}
+          onTogglePeriod={() => setDistanceSMAPeriod(p => p === 200 ? 50 : 200)}
         />
       )}
     </div>
