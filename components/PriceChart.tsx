@@ -11,6 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceDot,
+  ReferenceLine,
   Legend,
   Label,
 } from 'recharts';
@@ -466,6 +467,17 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                   }
                 />
               </ReferenceDot>
+            )}
+
+            {/* Current price horizontal reference line */}
+            {isSingleTicker && currentPrice && (
+              <ReferenceLine
+                y={currentPrice}
+                stroke="#000000"
+                strokeDasharray="4 4"
+                strokeWidth={1}
+                strokeOpacity={0.4}
+              />
             )}
 
             {/* End-of-chart bubbles (price + SMAs) sorted by value, highest on top */}
