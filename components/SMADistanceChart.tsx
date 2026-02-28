@@ -21,7 +21,6 @@ interface SMADistanceChartProps {
   isLongRange?: boolean;
   tickCount?: number;
   resolvedTicks?: string[];
-  yearChangeDates?: Set<string>;
   smaPeriod: 50 | 200;
   onTogglePeriod: () => void;
 }
@@ -97,7 +96,6 @@ export default function SMADistanceChart({
   isLongRange = false,
   tickCount = 8,
   resolvedTicks,
-  yearChangeDates,
   smaPeriod,
   onTogglePeriod,
 }: SMADistanceChartProps) {
@@ -199,7 +197,7 @@ export default function SMADistanceChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} />}
               ticks={resolvedTicks}
               tickCount={resolvedTicks ? undefined : tickCount}
               height={xAxisHeight}

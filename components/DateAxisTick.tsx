@@ -8,17 +8,13 @@ interface DateAxisTickProps {
   payload?: { value: string };
   isShortRange: boolean;
   isLongRange: boolean;
-  yearChangeDates?: Set<string>;
 }
 
 /**
  * Custom X-axis tick for date labels.
  * - Short range: "15 Jan"
  * - Long range: "2024"
- * - Medium range: two-line — year (when it changes) + month
- *
- * `yearChangeDates` is a Set of date strings where the year differs from the previous tick.
- * Pass this to show the year label only on year transitions.
+ * - Medium range: two-line — year on first line, month on second
  */
 export default function DateAxisTick({
   x,
@@ -26,7 +22,6 @@ export default function DateAxisTick({
   payload,
   isShortRange,
   isLongRange,
-  yearChangeDates,
 }: DateAxisTickProps) {
   if (x === undefined || y === undefined || !payload) return null;
 
@@ -50,19 +45,15 @@ export default function DateAxisTick({
     );
   }
 
-  // Medium range: year on first line (only when it changes), month on second
-  const showYear = yearChangeDates ? yearChangeDates.has(payload.value) : true;
-
+  // Medium range: year on first line, month on second
   return (
     <g>
-      {showYear && (
-        <text x={x} y={y + 12} fill="#9ca3af" textAnchor="middle" fontSize={10}>
-          {year}
-        </text>
-      )}
+      <text x={x} y={y + 12} fill="#9ca3af" textAnchor="middle" fontSize={10}>
+        {year}
+      </text>
       <text
         x={x}
-        y={showYear ? y + 24 : y + 12}
+        y={y + 24}
         fill="#6b7280"
         textAnchor="middle"
         fontSize={11}
@@ -86,19 +77,3 @@ export function computeEvenTicks(dates: string[], count: number): string[] {
   return ticks;
 }
 
-/**
- * Build a Set of tick dates where the year changes compared to the previous tick.
- * Always includes the first date. Pass the result as `yearChangeDates`.
- */
-export function buildYearChangeDates(tickDates: string[]): Set<string> {
-  const result = new Set<string>();
-  let lastYear = -1;
-  for (const date of tickDates) {
-    const year = new Date(date).getFullYear();
-    if (year !== lastYear) {
-      result.add(date);
-      lastYear = year;
-    }
-  }
-  return result;
-}

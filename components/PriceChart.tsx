@@ -19,7 +19,7 @@ import { ChartDataPoint, TickerData } from '@/lib/types';
 import { findExtremes, calculateDrawdownSeries, calculateSMA, calculateSMADistance } from '@/lib/statistics';
 import DrawdownChart from './DrawdownChart';
 import SMADistanceChart from './SMADistanceChart';
-import DateAxisTick, { computeEvenTicks, buildYearChangeDates } from './DateAxisTick';
+import DateAxisTick, { computeEvenTicks } from './DateAxisTick';
 
 interface PriceChartProps {
   data: ChartDataPoint[];
@@ -198,11 +198,6 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
     return computeEvenTicks(dates, tickCount);
   }, [data, isShortRange, isLongRange, tickCount]);
 
-  const yearChangeDates = useMemo(() => {
-    if (!mediumTicks) return undefined;
-    return buildYearChangeDates(mediumTicks);
-  }, [mediumTicks]);
-
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-8 flex items-center justify-center h-96">
@@ -370,7 +365,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             <XAxis
               dataKey="date"
               tick={showPriceChartXAxis
-                ? (props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />
+                ? (props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} />
                 : false}
               ticks={resolvedTicks}
               tickCount={resolvedTicks ? undefined : tickCount}
@@ -529,8 +524,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-          yearChangeDates={yearChangeDates}
-        />
+                  />
       )}
 
       {/* Drawdown Chart - multi ticker */}
@@ -544,8 +538,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-          yearChangeDates={yearChangeDates}
-          multiData={multiDrawdownData}
+                    multiData={multiDrawdownData}
         />
       )}
 
@@ -557,8 +550,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-          yearChangeDates={yearChangeDates}
-          smaPeriod={distanceSMAPeriod}
+                    smaPeriod={distanceSMAPeriod}
           onTogglePeriod={() => setDistanceSMAPeriod(p => p === 200 ? 50 : 200)}
         />
       )}

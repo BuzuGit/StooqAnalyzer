@@ -31,7 +31,6 @@ interface DrawdownChartProps {
   isLongRange?: boolean;
   tickCount?: number;
   resolvedTicks?: string[];
-  yearChangeDates?: Set<string>;
   multiData?: MultiDrawdownData[];
 }
 
@@ -107,7 +106,6 @@ export default function DrawdownChart({
   isLongRange = false,
   tickCount = 8,
   resolvedTicks,
-  yearChangeDates,
   multiData,
 }: DrawdownChartProps) {
   const isMulti = multiData && multiData.length > 0;
@@ -188,7 +186,7 @@ export default function DrawdownChart({
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis
             dataKey="date"
-            tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+            tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} />}
             ticks={resolvedTicks}
             tickCount={resolvedTicks ? undefined : tickCount}
             height={xAxisHeight}

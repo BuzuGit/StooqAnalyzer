@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { StooqDataPoint, TrendSignal } from '@/lib/types';
 import { calculateTrendFollowingAnalysis } from '@/lib/statistics';
-import DateAxisTick, { computeEvenTicks, buildYearChangeDates } from './DateAxisTick';
+import DateAxisTick, { computeEvenTicks } from './DateAxisTick';
 
 interface TrendFollowingSectionProps {
   data: StooqDataPoint[];     // Filtered price data (visible range)
@@ -293,7 +293,6 @@ export default function TrendFollowingSection({
     return computeEvenTicks(dates, tickCount);
   })();
   const resolvedTicks = yearlyTicks || mediumTicks;
-  const yearChangeDates = mediumTicks ? buildYearChangeDates(mediumTicks) : undefined;
   const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
 
   // Find signal change points for markers (limit to avoid clutter)
@@ -403,7 +402,7 @@ export default function TrendFollowingSection({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} />}
               ticks={resolvedTicks}
               tickCount={resolvedTicks ? undefined : tickCount}
               axisLine={false}
@@ -491,7 +490,7 @@ export default function TrendFollowingSection({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} />}
               ticks={resolvedTicks}
               tickCount={resolvedTicks ? undefined : tickCount}
               height={xAxisHeight}
