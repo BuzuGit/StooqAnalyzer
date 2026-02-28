@@ -186,7 +186,6 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   const dateRangeDays = firstDate && lastDate
     ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
-  const dateRangeYears = dateRangeDays / 365;
   const isShortRange = dateRangeDays <= 93; // ~3 months
   const isLongRange = dateRangeDays > 365 * 5; // > 5 years
   const tickCount = 8;
@@ -524,7 +523,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-                  />
+        />
       )}
 
       {/* Drawdown Chart - multi ticker */}
@@ -538,7 +537,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-                    multiData={multiDrawdownData}
+          multiData={multiDrawdownData}
         />
       )}
 
@@ -550,7 +549,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
-                    smaPeriod={distanceSMAPeriod}
+          smaPeriod={distanceSMAPeriod}
           onTogglePeriod={() => setDistanceSMAPeriod(p => p === 200 ? 50 : 200)}
         />
       )}

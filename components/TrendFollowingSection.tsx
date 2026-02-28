@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { StooqDataPoint, TrendSignal } from '@/lib/types';
 import { calculateTrendFollowingAnalysis } from '@/lib/statistics';
-import DateAxisTick, { computeEvenTicks } from './DateAxisTick';
+import DateAxisTick, { computeEvenTicks, MONTHS } from './DateAxisTick';
 
 interface TrendFollowingSectionProps {
   data: StooqDataPoint[];     // Filtered price data (visible range)
@@ -53,8 +53,6 @@ const COMMISSION_OPTIONS = [
   { value: 0.0045, label: '0.45%' },
   { value: 0.005, label: '0.50%' },
 ];
-
-const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // Custom tooltip for growth chart
 function GrowthTooltip({ active, payload, label }: any) {
@@ -263,7 +261,7 @@ export default function TrendFollowingSection({
   // Format dates for display in header
   const formatHeaderDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return `${months[d.getMonth()]} ${d.getFullYear()}`;
+    return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   };
   const displayDateRange = `${formatHeaderDate(firstDate)} - ${formatHeaderDate(lastDate)}`;
 
