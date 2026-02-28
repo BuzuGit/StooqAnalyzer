@@ -141,7 +141,7 @@ export default function DateRangeFilter({
             { label: '3Y', action: () => applyYearPreset(3) },
             { label: '5Y', action: () => applyYearPreset(5) },
             { label: '10Y', action: () => applyYearPreset(10) },
-            { label: 'All', action: handleReset },
+            { label: 'Max', action: handleReset },
           ].map((preset) => (
             <button
               key={preset.label}

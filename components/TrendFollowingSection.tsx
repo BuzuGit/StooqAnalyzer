@@ -18,7 +18,8 @@ import { StooqDataPoint, TrendSignal } from '@/lib/types';
 import { calculateTrendFollowingAnalysis } from '@/lib/statistics';
 
 interface TrendFollowingSectionProps {
-  data: StooqDataPoint[];  // Raw price data
+  data: StooqDataPoint[];     // Filtered price data (visible range)
+  rawData: StooqDataPoint[];  // Full unfiltered data for SMA warmup
   ticker: string;
 }
 
@@ -200,6 +201,7 @@ function StatRow({
 
 export default function TrendFollowingSection({
   data,
+  rawData,
   ticker,
 }: TrendFollowingSectionProps) {
   // Local state for configurable parameters
@@ -207,9 +209,10 @@ export default function TrendFollowingSection({
   const [commission, setCommission] = useState(0.002);
 
   // Calculate analysis with current parameters
+  // rawData provides full history for SMA warmup so the chart aligns with the price chart date range
   const analysis = useMemo(() => {
-    return calculateTrendFollowingAnalysis(data, riskFreeRate, commission);
-  }, [data, riskFreeRate, commission]);
+    return calculateTrendFollowingAnalysis(data, riskFreeRate, commission, rawData);
+  }, [data, riskFreeRate, commission, rawData]);
 
   // Calculate signal statistics (memoized for efficiency)
   // Must be before early return to satisfy React hooks rules
@@ -311,9 +314,6 @@ export default function TrendFollowingSection({
         </div>
         <p className="text-sm text-gray-500 mt-1">
           Growth of $1 comparing passive investing to a 10-month moving average strategy.
-          <span className="text-gray-400 ml-1">
-            Note: Analysis starts after 10 months (required to calculate initial SMA).
-          </span>
         </p>
         {/* Signal Statistics */}
         <div className="flex flex-wrap gap-4 mt-2 text-sm">

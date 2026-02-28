@@ -120,6 +120,7 @@ export default function Home() {
   const focusedIdx = Math.min(focusedTickerIndex, Math.max(tickers.length - 1, 0));
   const focusedTicker = tickers[focusedIdx] || '';
   const focusedData = filteredTickersData[focusedIdx]?.data || [];
+  const rawFocusedData = rawTickersData[focusedIdx]?.data || [];
 
   return (
     <main className="min-h-screen bg-gray-100">
@@ -209,6 +210,7 @@ export default function Home() {
         {tickers.length >= 1 && focusedData.length >= 252 && (
           <TrendFollowingSection
             data={focusedData}
+            rawData={rawFocusedData}
             ticker={focusedTicker}
           />
         )}

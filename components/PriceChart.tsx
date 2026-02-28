@@ -66,83 +66,46 @@ function PriceLabel({
   );
 }
 
-// Custom component for current price bubble
-function CurrentPriceBubble({
+// Unified end-of-chart bubble renderer: renders all price/SMA bubbles sorted by value (highest on top)
+function EndBubbles({
   viewBox,
-  value,
+  items,
 }: {
   viewBox?: { x: number; y: number; width: number };
-  value: string;
+  items: { label: string; color: string }[];
 }) {
-  if (!viewBox) return null;
+  if (!viewBox || items.length === 0) return null;
   const { x, y, width = 0 } = viewBox;
   const bubbleX = x + width + 5;
-  // Dynamic width based on text length (approx 7px per character + padding)
-  const bubbleWidth = Math.max(value.length * 7 + 12, 35);
 
   return (
     <g>
-      <rect
-        x={bubbleX}
-        y={y - 10}
-        width={bubbleWidth}
-        height={20}
-        rx={4}
-        fill="#000000"
-      />
-      <text
-        x={bubbleX + bubbleWidth / 2}
-        y={y + 4}
-        fill="white"
-        fontSize={10}
-        fontWeight="500"
-        textAnchor="middle"
-      >
-        {value}
-      </text>
-    </g>
-  );
-}
-
-// Custom component for SMA bubble at end of line, with vertical offset to avoid overlap
-function SMABubble({
-  viewBox,
-  value,
-  color,
-  slotIndex = 0,
-}: {
-  viewBox?: { x: number; y: number; width: number };
-  value: string;
-  color: string;
-  slotIndex?: number;
-}) {
-  if (!viewBox) return null;
-  const { x, width = 0 } = viewBox;
-  const bubbleX = x + width + 5;
-  const bubbleWidth = Math.max(value.length * 7 + 12, 35);
-  // Stack below the price bubble: slot 0 = just below price, slot 1 = next row
-  const bubbleY = viewBox.y + 14 + slotIndex * 22;
-
-  return (
-    <g>
-      <rect
-        x={bubbleX}
-        y={bubbleY - 10}
-        width={bubbleWidth}
-        height={20}
-        rx={4}
-        fill={color}
-      />
-      <text
-        x={bubbleX + bubbleWidth / 2}
-        y={bubbleY + 4}
-        fill="white"
-        fontSize={10}
-        fontWeight="500"
-        textAnchor="middle"
-      >
-        {value}
-      </text>
+      {items.map((item, idx) => {
+        const bubbleWidth = Math.max(item.label.length * 7 + 12, 35);
+        const bubbleY = y - 10 + idx * 22;
+        return (
+          <g key={idx}>
+            <rect
+              x={bubbleX}
+              y={bubbleY}
+              width={bubbleWidth}
+              height={20}
+              rx={4}
+              fill={item.color}
+            />
+            <text
+              x={bubbleX + bubbleWidth / 2}
+              y={bubbleY + 14}
+              fill="white"
+              fontSize={10}
+              fontWeight="500"
+              textAnchor="middle"
+            >
+              {item.label}
+            </text>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -461,27 +424,6 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
               />
             )}
 
-            {/* SMA bubbles stacked below price bubble */}
-            {show50SMA && isSingleTicker && lastDate && currentPrice && lastSMA50 !== undefined && (
-              <ReferenceDot x={lastDate} y={currentPrice} r={0}>
-                <Label
-                  content={
-                    <SMABubble value={formatPrice(lastSMA50)} color="#dc2626" slotIndex={0} />
-                  }
-                />
-              </ReferenceDot>
-            )}
-
-            {show200SMA && isSingleTicker && lastDate && currentPrice && lastSMA200 !== undefined && (
-              <ReferenceDot x={lastDate} y={currentPrice} r={0}>
-                <Label
-                  content={
-                    <SMABubble value={formatPrice(lastSMA200)} color="#eab308" slotIndex={show50SMA ? 1 : 0} />
-                  }
-                />
-              </ReferenceDot>
-            )}
-
             {/* High point marker with label */}
             {extremes && (
               <ReferenceDot
@@ -526,20 +468,29 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
               </ReferenceDot>
             )}
 
-            {/* Current price bubble at the end */}
-            {isSingleTicker && currentPrice && lastDate && (
-              <ReferenceDot
-                x={lastDate}
-                y={currentPrice}
-                r={0}
-              >
-                <Label
-                  content={
-                    <CurrentPriceBubble value={formatPrice(currentPrice)} />
-                  }
-                />
-              </ReferenceDot>
-            )}
+            {/* End-of-chart bubbles (price + SMAs) sorted by value, highest on top */}
+            {isSingleTicker && currentPrice && lastDate && (() => {
+              const items: { value: number; label: string; color: string }[] = [
+                { value: currentPrice, label: formatPrice(currentPrice), color: '#000000' },
+              ];
+              if (show50SMA && lastSMA50 !== undefined) {
+                items.push({ value: lastSMA50, label: formatPrice(lastSMA50), color: '#dc2626' });
+              }
+              if (show200SMA && lastSMA200 !== undefined) {
+                items.push({ value: lastSMA200, label: formatPrice(lastSMA200), color: '#eab308' });
+              }
+              items.sort((a, b) => b.value - a.value);
+              const anchorValue = items[0].value;
+              return (
+                <ReferenceDot x={lastDate} y={anchorValue} r={0}>
+                  <Label
+                    content={
+                      <EndBubbles items={items.map(i => ({ label: i.label, color: i.color }))} />
+                    }
+                  />
+                </ReferenceDot>
+              );
+            })()}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

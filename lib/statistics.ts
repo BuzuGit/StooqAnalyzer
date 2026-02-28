@@ -1082,25 +1082,29 @@ function calculateStrategyStatistics(
 export function calculateTrendFollowingAnalysis(
   data: StooqDataPoint[],
   riskFreeRate: number = 0.02,  // Default 2%
-  commission: number = 0        // Default 0%
+  commission: number = 0,       // Default 0%
+  rawData?: StooqDataPoint[]    // Full unfiltered data for SMA warmup
 ): TrendFollowingAnalysis | null {
   if (data.length < 252) {
     // Need at least ~1 year of data
     return null;
   }
 
-  // Step 1: Extract monthly end prices
-  const monthlyPrices = extractMonthlyEndPrices(data);
+  // Use rawData for SMA warmup if provided, otherwise fall back to data
+  const warmupData = rawData && rawData.length > 0 ? rawData : data;
+
+  // Step 1: Extract monthly end prices from full data (for proper SMA warmup)
+  const monthlyPrices = extractMonthlyEndPrices(warmupData);
 
   // Need at least 12 months for meaningful analysis
   if (monthlyPrices.length < 12) {
     return null;
   }
 
-  // Step 2: Calculate monthly signals with 10-month SMA
+  // Step 2: Calculate monthly signals with 10-month SMA (using full history)
   const monthlySignals = calculateMonthlySignals(monthlyPrices);
 
-  // Step 3: Build daily equity curves
+  // Step 3: Build daily equity curves (using filtered data for display range)
   const { chartData, signalDates } = calculateTrendFollowingEquity(data, monthlySignals, riskFreeRate, commission);
 
   if (chartData.length === 0) {
