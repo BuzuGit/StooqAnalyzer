@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { StooqDataPoint, TrendSignal } from '@/lib/types';
 import { calculateTrendFollowingAnalysis } from '@/lib/statistics';
+import DateAxisTick, { computeEvenTicks, buildYearChangeDates } from './DateAxisTick';
 
 interface TrendFollowingSectionProps {
   data: StooqDataPoint[];     // Filtered price data (visible range)
@@ -53,19 +54,7 @@ const COMMISSION_OPTIONS = [
   { value: 0.005, label: '0.50%' },
 ];
 
-// Format date for X axis
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function formatDateAxis(date: string, isShortRange: boolean, isLongRange: boolean): string {
-  const d = new Date(date);
-  if (isShortRange) {
-    return `${d.getDate()} ${months[d.getMonth()]}`;
-  }
-  if (isLongRange) {
-    return d.getFullYear().toString();
-  }
-  return `${months[d.getMonth()]}${d.getFullYear().toString().slice(-2)}`;
-}
 
 // Custom tooltip for growth chart
 function GrowthTooltip({ active, payload, label }: any) {
@@ -297,6 +286,16 @@ export default function TrendFollowingSection({
   const yearlyTicks = getYearlyTicks();
   const tickCount = 8;
 
+  // For medium range: compute explicit ticks and year-change set for two-line labels
+  const mediumTicks = (() => {
+    if (isShortRange || isLongRange || chartData.length === 0) return undefined;
+    const dates = chartData.map(d => d.date);
+    return computeEvenTicks(dates, tickCount);
+  })();
+  const resolvedTicks = yearlyTicks || mediumTicks;
+  const yearChangeDates = mediumTicks ? buildYearChangeDates(mediumTicks) : undefined;
+  const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
+
   // Find signal change points for markers (limit to avoid clutter)
   const signalChanges = signalDates.slice(-20); // Show last 20 signal changes max
 
@@ -404,12 +403,12 @@ export default function TrendFollowingSection({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              tickFormatter={(date) => formatDateAxis(date, isShortRange, isLongRange)}
-              ticks={yearlyTicks}
-              tickCount={yearlyTicks ? undefined : tickCount}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              ticks={resolvedTicks}
+              tickCount={resolvedTicks ? undefined : tickCount}
               axisLine={false}
               tickLine={false}
+              height={xAxisHeight}
             />
             <YAxis
               tick={{ fontSize: 12, fill: '#6b7280' }}
@@ -492,10 +491,10 @@ export default function TrendFollowingSection({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              tickFormatter={(date) => formatDateAxis(date, isShortRange, isLongRange)}
-              ticks={yearlyTicks}
-              tickCount={yearlyTicks ? undefined : tickCount}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              ticks={resolvedTicks}
+              tickCount={resolvedTicks ? undefined : tickCount}
+              height={xAxisHeight}
             />
             <YAxis
               tick={{ fontSize: 10, fill: '#6b7280' }}

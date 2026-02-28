@@ -13,13 +13,15 @@ import {
   Label,
 } from 'recharts';
 import { SMADistancePoint } from '@/lib/statistics';
+import DateAxisTick from './DateAxisTick';
 
 interface SMADistanceChartProps {
   data: SMADistancePoint[];
   isShortRange?: boolean;
   isLongRange?: boolean;
   tickCount?: number;
-  yearlyTicks?: string[];
+  resolvedTicks?: string[];
+  yearChangeDates?: Set<string>;
   smaPeriod: 50 | 200;
   onTogglePeriod: () => void;
 }
@@ -94,7 +96,8 @@ export default function SMADistanceChart({
   isShortRange = false,
   isLongRange = false,
   tickCount = 8,
-  yearlyTicks,
+  resolvedTicks,
+  yearChangeDates,
   smaPeriod,
   onTogglePeriod,
 }: SMADistanceChartProps) {
@@ -141,14 +144,7 @@ export default function SMADistanceChart({
     return `${sign}${value.toFixed(1)}%`;
   };
 
-  // Format date for X axis (matching price chart)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const formatDateAxis = (date: string) => {
-    const d = new Date(date);
-    if (isShortRange) return `${d.getDate()} ${months[d.getMonth()]}`;
-    if (isLongRange) return d.getFullYear().toString();
-    return `${months[d.getMonth()]}${d.getFullYear().toString().slice(-2)}`;
-  };
+  const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
 
   return (
     <div>
@@ -203,10 +199,10 @@ export default function SMADistanceChart({
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              tickFormatter={formatDateAxis}
-              ticks={yearlyTicks}
-              tickCount={yearlyTicks ? undefined : tickCount}
+              tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+              ticks={resolvedTicks}
+              tickCount={resolvedTicks ? undefined : tickCount}
+              height={xAxisHeight}
             />
             <YAxis
               tick={{ fontSize: 10, fill: '#6b7280' }}

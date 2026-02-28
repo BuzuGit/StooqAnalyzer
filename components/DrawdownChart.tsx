@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { DrawdownDataPoint } from '@/lib/statistics';
+import DateAxisTick from './DateAxisTick';
 
 interface MultiDrawdownData {
   ticker: string;
@@ -29,7 +30,8 @@ interface DrawdownChartProps {
   isShortRange?: boolean;
   isLongRange?: boolean;
   tickCount?: number;
-  yearlyTicks?: string[];
+  resolvedTicks?: string[];
+  yearChangeDates?: Set<string>;
   multiData?: MultiDrawdownData[];
 }
 
@@ -104,7 +106,8 @@ export default function DrawdownChart({
   isShortRange = false,
   isLongRange = false,
   tickCount = 8,
-  yearlyTicks,
+  resolvedTicks,
+  yearChangeDates,
   multiData,
 }: DrawdownChartProps) {
   const isMulti = multiData && multiData.length > 0;
@@ -157,18 +160,7 @@ export default function DrawdownChart({
     return `${value.toFixed(1)}%`;
   };
 
-  // Format date for X axis - dynamic based on date range (matching price chart)
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const formatDateAxis = (date: string) => {
-    const d = new Date(date);
-    if (isShortRange) {
-      return `${d.getDate()} ${months[d.getMonth()]}`;
-    }
-    if (isLongRange) {
-      return d.getFullYear().toString();
-    }
-    return `${months[d.getMonth()]}${d.getFullYear().toString().slice(-2)}`;
-  };
+  const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
 
   return (
     <div className="h-44">
@@ -196,10 +188,10 @@ export default function DrawdownChart({
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11, fill: '#6b7280' }}
-            tickFormatter={formatDateAxis}
-            ticks={yearlyTicks}
-            tickCount={yearlyTicks ? undefined : tickCount}
+            tick={(props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />}
+            ticks={resolvedTicks}
+            tickCount={resolvedTicks ? undefined : tickCount}
+            height={xAxisHeight}
           />
           <YAxis
             tick={{ fontSize: 10, fill: '#6b7280' }}

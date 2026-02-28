@@ -19,6 +19,7 @@ import { ChartDataPoint, TickerData } from '@/lib/types';
 import { findExtremes, calculateDrawdownSeries, calculateSMA, calculateSMADistance } from '@/lib/statistics';
 import DrawdownChart from './DrawdownChart';
 import SMADistanceChart from './SMADistanceChart';
+import DateAxisTick, { computeEvenTicks, buildYearChangeDates } from './DateAxisTick';
 
 interface PriceChartProps {
   data: ChartDataPoint[];
@@ -179,6 +180,29 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
       }));
   }, [isSingleTicker, tickersData]);
 
+  // Date range calculations — must be before early return so hooks below always run
+  const lastDate = data.length > 0 ? data[data.length - 1].date : null;
+  const firstDate = data.length > 0 ? data[0].date : null;
+  const dateRangeDays = firstDate && lastDate
+    ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const dateRangeYears = dateRangeDays / 365;
+  const isShortRange = dateRangeDays <= 93; // ~3 months
+  const isLongRange = dateRangeDays > 365 * 5; // > 5 years
+  const tickCount = 8;
+
+  // For medium range: compute explicit ticks and year-change set for two-line labels
+  const mediumTicks = useMemo(() => {
+    if (isShortRange || isLongRange || data.length === 0) return undefined;
+    const dates = data.map(d => d.date);
+    return computeEvenTicks(dates, tickCount);
+  }, [data, isShortRange, isLongRange, tickCount]);
+
+  const yearChangeDates = useMemo(() => {
+    if (!mediumTicks) return undefined;
+    return buildYearChangeDates(mediumTicks);
+  }, [mediumTicks]);
+
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-8 flex items-center justify-center h-96">
@@ -202,9 +226,6 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
     ? primaryData[primaryData.length - 1].close
     : null;
 
-  const lastDate = data.length > 0 ? data[data.length - 1].date : null;
-  const firstDate = data.length > 0 ? data[0].date : null;
-
   // Get latest SMA values for bubbles
   const lastSMA50 = show50SMA && chartDataWithSMA.length > 0
     ? (chartDataWithSMA[chartDataWithSMA.length - 1] as Record<string, unknown>).sma50 as number | undefined
@@ -212,14 +233,6 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   const lastSMA200 = show200SMA && chartDataWithSMA.length > 0
     ? (chartDataWithSMA[chartDataWithSMA.length - 1] as Record<string, unknown>).sma200 as number | undefined
     : undefined;
-
-  // Calculate date range in days to determine X axis format
-  const dateRangeDays = firstDate && lastDate
-    ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
-  const dateRangeYears = dateRangeDays / 365;
-  const isShortRange = dateRangeDays <= 93; // ~3 months
-  const isLongRange = dateRangeDays > 365 * 5; // > 5 years
 
   // Generate custom ticks for long range (yearly ticks)
   const getYearlyTicks = () => {
@@ -240,8 +253,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   };
   const yearlyTicks = getYearlyTicks();
 
-  // Tick count for non-yearly views
-  const tickCount = 8;
+  // Resolved ticks: yearlyTicks for long range, mediumTicks for medium, undefined for short
+  const resolvedTicks = yearlyTicks || mediumTicks;
 
   // Format price for display - dynamic decimal places
   const formatPrice = (price: number) => {
@@ -278,21 +291,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
     return [`${value.toFixed(2)}%`, name];
   };
 
-  // Format date for X axis - dynamic based on date range
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const formatDateAxis = (date: string) => {
-    const d = new Date(date);
-    if (isShortRange) {
-      // Short range (<= 3 months): show "15 Jan" format
-      return `${d.getDate()} ${months[d.getMonth()]}`;
-    }
-    if (isLongRange) {
-      // Long range (> 5 years): show year only "2024"
-      return d.getFullYear().toString();
-    }
-    // Medium range: show "Jan25" format
-    return `${months[d.getMonth()]}${d.getFullYear().toString().slice(-2)}`;
-  };
+  // XAxis tick height: taller for medium range (two-line labels)
+  const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
 
   // Whether to show X axis on price chart (hide if drawdown chart is shown below)
   const hasDrawdown = (isSingleTicker && drawdownSeries && drawdownSeries.data.length > 0) ||
@@ -369,12 +369,14 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="date"
-              tick={showPriceChartXAxis ? { fontSize: 11, fill: '#6b7280' } : false}
-              tickFormatter={formatDateAxis}
-              ticks={yearlyTicks}
-              tickCount={yearlyTicks ? undefined : tickCount}
+              tick={showPriceChartXAxis
+                ? (props) => <DateAxisTick {...props} isShortRange={isShortRange} isLongRange={isLongRange} yearChangeDates={yearChangeDates} />
+                : false}
+              ticks={resolvedTicks}
+              tickCount={resolvedTicks ? undefined : tickCount}
               axisLine={showPriceChartXAxis}
               tickLine={showPriceChartXAxis}
+              height={xAxisHeight}
             />
             <YAxis
               tick={{ fontSize: 12, fill: '#6b7280' }}
@@ -526,7 +528,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isShortRange={isShortRange}
           isLongRange={isLongRange}
           tickCount={tickCount}
-          yearlyTicks={yearlyTicks}
+          resolvedTicks={resolvedTicks}
+          yearChangeDates={yearChangeDates}
         />
       )}
 
@@ -540,7 +543,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isShortRange={isShortRange}
           isLongRange={isLongRange}
           tickCount={tickCount}
-          yearlyTicks={yearlyTicks}
+          resolvedTicks={resolvedTicks}
+          yearChangeDates={yearChangeDates}
           multiData={multiDrawdownData}
         />
       )}
@@ -552,7 +556,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           isShortRange={isShortRange}
           isLongRange={isLongRange}
           tickCount={tickCount}
-          yearlyTicks={yearlyTicks}
+          resolvedTicks={resolvedTicks}
+          yearChangeDates={yearChangeDates}
           smaPeriod={distanceSMAPeriod}
           onTogglePeriod={() => setDistanceSMAPeriod(p => p === 200 ? 50 : 200)}
         />
