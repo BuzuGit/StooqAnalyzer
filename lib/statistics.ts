@@ -481,9 +481,7 @@ export function calculateSMA(
 // Calculate distance from SMA as percentage
 export interface SMADistancePoint {
   date: string;
-  distance: number; // actual distance — positive above SMA, negative below
-  above: number;    // positive distance (0 when below) — for extreme detection
-  below: number;    // negative distance (0 when above) — for extreme detection
+  distance: number; // positive when above SMA, negative when below
 }
 
 export function calculateSMADistance(
@@ -501,12 +499,9 @@ export function calculateSMADistance(
   for (const point of data) {
     const sma = smaMap.get(point.date);
     if (sma === undefined) continue;
-    const distance = ((point.close - sma) / sma) * 100;
     result.push({
       date: point.date,
-      distance,
-      above: distance >= 0 ? distance : 0,
-      below: distance < 0 ? distance : 0,
+      distance: ((point.close - sma) / sma) * 100,
     });
   }
   return result;

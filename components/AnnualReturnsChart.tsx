@@ -16,7 +16,6 @@ import {
 } from 'recharts';
 import {
   YearlyData,
-  PeriodicReturnPoint,
   flattenMonthlyReturns,
   calculateQuarterlyReturns,
 } from '@/lib/statistics';
@@ -241,10 +240,10 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
             radius={[2, 2, 0, 0]}
             maxBarSize={40}
           >
-            {annualChartData.map((entry, index) => (
+            {annualChartData.map((_entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.annualReturn !== null && entry.annualReturn >= 0 ? '#1f2937' : '#1f2937'}
+                fill="#1f2937"
               />
             ))}
             <LabelList

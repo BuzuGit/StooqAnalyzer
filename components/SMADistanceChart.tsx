@@ -100,19 +100,19 @@ export default function SMADistanceChart({
 }: SMADistanceChartProps) {
   if (data.length === 0) return null;
 
-  // Find extremes (still using above/below for this)
+  // Find extremes
   let maxAbove = 0;
   let maxAboveDate = '';
   let maxBelow = 0;
   let maxBelowDate = '';
 
   for (const point of data) {
-    if (point.above > maxAbove) {
-      maxAbove = point.above;
+    if (point.distance > maxAbove) {
+      maxAbove = point.distance;
       maxAboveDate = point.date;
     }
-    if (point.below < maxBelow) {
-      maxBelow = point.below;
+    if (point.distance < maxBelow) {
+      maxBelow = point.distance;
       maxBelowDate = point.date;
     }
   }
