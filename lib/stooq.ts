@@ -1,58 +1,28 @@
-import Papa from 'papaparse';
-import { StooqDataPoint, TickerData } from './types';
-
-const STOOQ_BASE_URL = 'https://stooq.pl/q/d/l/';
-
-export async function fetchStooqData(ticker: string): Promise<TickerData> {
-  const url = `${STOOQ_BASE_URL}?s=${encodeURIComponent(ticker.toLowerCase())}&d1=19000101&d2=20301231&i=d`;
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch data for ${ticker}: ${response.statusText}`);
-  }
-
-  const csvText = await response.text();
-
-  if (!csvText || csvText.trim().length === 0) {
-    throw new Error(`No data returned for ticker: ${ticker}`);
-  }
-
-  const data = parseStooqCSV(csvText, ticker);
-
-  if (data.length === 0) {
-    throw new Error(`Invalid ticker or no data available: ${ticker}`);
-  }
-
-  return {
-    ticker: ticker.toUpperCase(),
-    data,
-  };
-}
+import { StooqDataPoint } from './types';
 
 export function parseStooqCSV(csvText: string, ticker: string): StooqDataPoint[] {
-  const result = Papa.parse(csvText, {
-    header: true,
-    skipEmptyLines: true,
-  });
-
-  if (result.errors.length > 0) {
-    console.warn(`CSV parsing warnings for ${ticker}:`, result.errors);
-  }
-
+  const lines = csvText.split('\n');
   const data: StooqDataPoint[] = [];
 
-  for (const row of result.data as Record<string, string>[]) {
-    // Stooq CSV columns: Data, Otwarcie, Najwyzszy, Najnizszy, Zamkniecie, Wolumen
-    // Or in English: Date, Open, High, Low, Close, Volume
-    const date = row['Data'] || row['Date'];
-    const open = parseFloat(row['Otwarcie'] || row['Open'] || '0');
-    const high = parseFloat(row['Najwyzszy'] || row['High'] || '0');
-    const low = parseFloat(row['Najnizszy'] || row['Low'] || '0');
-    const close = parseFloat(row['Zamkniecie'] || row['Close'] || '0');
-    const volume = parseFloat(row['Wolumen'] || row['Volume'] || '0');
+  // Skip header line
+  for (let i = 1; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
 
-    if (date && !isNaN(close) && close > 0) {
+    const parts = trimmed.split(',');
+    if (parts.length < 5) continue;
+
+    // Stooq CSV columns: Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen
+    const date = parts[0];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+
+    const open = parseFloat(parts[1]);
+    const high = parseFloat(parts[2]);
+    const low = parseFloat(parts[3]);
+    const close = parseFloat(parts[4]);
+    const volume = parts.length > 5 ? parseFloat(parts[5]) : 0;
+
+    if (!isNaN(close) && close > 0) {
       data.push({
         date,
         open: isNaN(open) ? close : open,
@@ -68,20 +38,4 @@ export function parseStooqCSV(csvText: string, ticker: string): StooqDataPoint[]
   data.sort((a, b) => a.date.localeCompare(b.date));
 
   return data;
-}
-
-export async function fetchMultipleTickers(tickers: string[]): Promise<TickerData[]> {
-  const results: TickerData[] = [];
-
-  for (const ticker of tickers) {
-    try {
-      const data = await fetchStooqData(ticker.trim());
-      results.push(data);
-    } catch (error) {
-      console.error(`Error fetching ${ticker}:`, error);
-      throw error;
-    }
-  }
-
-  return results;
 }

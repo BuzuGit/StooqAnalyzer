@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchStooqData, parseStooqCSV } from '@/lib/stooq';
+import { parseStooqCSV } from '@/lib/stooq';
 import { ApiResponse, TickerData } from '@/lib/types';
 
 const STOOQ_BASE_URL = 'https://stooq.pl/q/d/l/';
@@ -31,11 +31,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const apiKey = process.env.STOOQ_API_KEY;
+
   try {
     const results: TickerData[] = [];
 
     for (const ticker of tickers) {
-      const url = `${STOOQ_BASE_URL}?s=${encodeURIComponent(ticker.toLowerCase())}&d1=19000101&d2=20301231&i=d`;
+      let url = `${STOOQ_BASE_URL}?s=${encodeURIComponent(ticker.toLowerCase())}&d1=19000101&d2=20301231&i=d`;
+      if (apiKey) {
+        url += `&apikey=${encodeURIComponent(apiKey)}`;
+      }
 
       const response = await fetch(url, {
         headers: {
@@ -56,6 +61,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json<ApiResponse>(
           { success: false, error: `No data available for ticker: ${ticker}` },
           { status: 404 }
+        );
+      }
+
+      if (csvText.includes('apikey') || csvText.includes('Uzyskaj')) {
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: 'Stooq API key is missing or invalid. Add STOOQ_API_KEY to .env.local' },
+          { status: 401 }
         );
       }
 
