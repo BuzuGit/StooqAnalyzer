@@ -41,6 +41,11 @@ export class StooqCaptchaRequiredError extends Error {
 
 /** Solve Stooq's hashcash-style proof-of-work: find n where sha256(c + n) starts with `d` zeros. */
 function solveProofOfWork(challenge: string, difficulty: number): number {
+  // Stooq uses difficulty 4; refuse absurd values so a changed/hostile challenge
+  // can't force a long CPU burn (each extra zero multiplies the work by 16).
+  if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 6) {
+    throw new StooqBlockedError('Stooq anti-bot challenge changed unexpectedly');
+  }
   const prefix = '0'.repeat(difficulty);
   let n = 0;
   // Bounded so a difficulty change can never hang the request.
@@ -193,7 +198,9 @@ export async function fetchStooqData(
 ): Promise<StooqDataPoint[]> {
   const session = getSession(token);
   if (!session) {
-    throw new StooqCaptchaRequiredError(createSession().token);
+    // Should not happen (the route ensures the session first), but if it expired
+    // mid-request, ask the user to retry rather than hand back an un-warmed session.
+    throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
 
   const res = await stooqFetch(downloadUrl(ticker, apiKey), session);

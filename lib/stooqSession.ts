@@ -27,11 +27,18 @@ const SESSIONS: Map<string, StooqSession> =
 globalForSessions.__stooqSessions = SESSIONS;
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_SESSIONS = 100; // safety cap so the store can't grow unbounded
 
 function prune(): void {
   const now = Date.now();
   for (const [token, session] of SESSIONS) {
     if (now - session.createdAt > TTL_MS) SESSIONS.delete(token);
+  }
+  // Map preserves insertion order, so the first entries are the oldest.
+  while (SESSIONS.size >= MAX_SESSIONS) {
+    const oldest = SESSIONS.keys().next().value;
+    if (oldest === undefined) break;
+    SESSIONS.delete(oldest);
   }
 }
 

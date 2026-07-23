@@ -6,7 +6,7 @@ import {
   StooqCaptchaRequiredError,
 } from '@/lib/stooq';
 import { fetchYahooData } from '@/lib/yahoo';
-import { ApiResponse, TickerData } from '@/lib/types';
+import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
 type DataSource = 'stooq' | 'yahoo';
 
@@ -42,31 +42,30 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.STOOQ_API_KEY;
 
   try {
+    // Yahoo requests are independent — fetch them in parallel. Stooq must stay
+    // sequential: all tickers share one CAPTCHA-unlocked session and Stooq rate
+    // limits per IP.
+    const datasets: StooqDataPoint[][] =
+      source === 'yahoo'
+        ? await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)))
+        : await (async () => {
+            const token = await ensureStooqSession(sessionToken);
+            const out: StooqDataPoint[][] = [];
+            for (const ticker of tickers) {
+              out.push(await fetchStooqData(ticker, token, apiKey));
+            }
+            return out;
+          })();
+
     const results: TickerData[] = [];
-
-    // Stooq needs a CAPTCHA-unlocked session before any download.
-    let token = sessionToken;
-    if (source === 'stooq') {
-      token = await ensureStooqSession(sessionToken);
-    }
-
-    for (const ticker of tickers) {
-      const data =
-        source === 'yahoo'
-          ? await fetchYahooData(ticker)
-          : await fetchStooqData(ticker, token!, apiKey);
-
-      if (data.length === 0) {
+    for (let i = 0; i < tickers.length; i++) {
+      if (datasets[i].length === 0) {
         return NextResponse.json<ApiResponse>(
-          { success: false, error: `Invalid ticker or no data: ${ticker}` },
+          { success: false, error: `Invalid ticker or no data: ${tickers[i]}` },
           { status: 404 }
         );
       }
-
-      results.push({
-        ticker: ticker.toUpperCase(),
-        data,
-      });
+      results.push({ ticker: tickers[i].toUpperCase(), data: datasets[i] });
     }
 
     return NextResponse.json<ApiResponse>({

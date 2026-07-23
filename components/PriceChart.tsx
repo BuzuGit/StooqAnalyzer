@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   ComposedChart,
   Area,
@@ -124,8 +124,11 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   const ct = getChartTheme(theme);
   // The primary asset uses COLORS[0] (black); swap it for a theme color so it
   // stays visible on a dark background.
-  const colorFor = (index: number) =>
-    index % COLORS.length === 0 ? ct.seriesPrimary : COLORS[index % COLORS.length];
+  const colorFor = useCallback(
+    (index: number) =>
+      index % COLORS.length === 0 ? ct.seriesPrimary : COLORS[index % COLORS.length],
+    [ct.seriesPrimary]
+  );
 
   const isSingleTicker = tickers.length === 1;
   const primaryTicker = tickers[0];
@@ -187,7 +190,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
         data: calculateDrawdownSeries(td.data).data,
         color: colorFor(index),
       }));
-  }, [isSingleTicker, tickersData]);
+  }, [isSingleTicker, tickersData, colorFor]);
 
   // Date range calculations — must be before early return so hooks below always run
   const lastDate = data.length > 0 ? data[data.length - 1].date : null;
