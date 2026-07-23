@@ -17,6 +17,8 @@ import {
 } from 'recharts';
 import { ChartDataPoint, TickerData } from '@/lib/types';
 import { findExtremes, calculateDrawdownSeries, calculateSMA, calculateSMADistance } from '@/lib/statistics';
+import { useTheme } from '@/components/ThemeProvider';
+import { getChartTheme } from '@/lib/chartTheme';
 import DrawdownChart from './DrawdownChart';
 import SMADistanceChart from './SMADistanceChart';
 import DateAxisTick, { computeEvenTicks } from './DateAxisTick';
@@ -118,6 +120,13 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   const [show200SMA, setShow200SMA] = useState(false);
   const [distanceSMAPeriod, setDistanceSMAPeriod] = useState<50 | 200>(200);
 
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
+  // The primary asset uses COLORS[0] (black); swap it for a theme color so it
+  // stays visible on a dark background.
+  const colorFor = (index: number) =>
+    index % COLORS.length === 0 ? ct.seriesPrimary : COLORS[index % COLORS.length];
+
   const isSingleTicker = tickers.length === 1;
   const primaryTicker = tickers[0];
   const primaryData = useMemo(
@@ -176,7 +185,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
       .map((td, index) => ({
         ticker: td.ticker,
         data: calculateDrawdownSeries(td.data).data,
-        color: COLORS[index % COLORS.length],
+        color: colorFor(index),
       }));
   }, [isSingleTicker, tickersData]);
 
@@ -199,8 +208,8 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-8 flex items-center justify-center h-96">
-        <p className="text-gray-500">Enter tickers above to see the chart</p>
+      <div className="bg-panel rounded-lg shadow-md p-8 flex items-center justify-center h-96">
+        <p className="text-muted">Enter tickers above to see the chart</p>
       </div>
     );
   }
@@ -294,10 +303,10 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
   const showPriceChartXAxis = !hasDrawdown;
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
+    <div className="bg-panel rounded-lg shadow-md p-4">
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-content">
             {isSingleTicker ? `${primaryTicker} Price & Drawdown` : 'Normalized Comparison (Base = 100)'}
           </h2>
           {isSingleTicker && (
@@ -307,7 +316,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 className={`px-2 py-0.5 text-xs rounded transition-colors ${
                   show50SMA
                     ? 'bg-red-100 text-red-700 border border-red-300'
-                    : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                    : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
                 }`}
               >
                 50SMA
@@ -317,7 +326,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 className={`px-2 py-0.5 text-xs rounded transition-colors ${
                   show200SMA
                     ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                    : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                    : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
                 }`}
               >
                 200SMA
@@ -326,7 +335,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           )}
         </div>
         {!isSingleTicker && (
-          <p className="text-sm text-gray-500">All series normalized to 100 at common start date</p>
+          <p className="text-sm text-muted">All series normalized to 100 at common start date</p>
         )}
       </div>
 
@@ -349,12 +358,12 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 >
                   <stop
                     offset="5%"
-                    stopColor={COLORS[index % COLORS.length]}
+                    stopColor={colorFor(index)}
                     stopOpacity={0.3}
                   />
                   <stop
                     offset="95%"
-                    stopColor={COLORS[index % COLORS.length]}
+                    stopColor={colorFor(index)}
                     stopOpacity={0}
                   />
                 </linearGradient>
@@ -394,7 +403,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 key={ticker}
                 type="monotone"
                 dataKey={ticker}
-                stroke={COLORS[index % COLORS.length]}
+                stroke={colorFor(index)}
                 fill={`url(#gradient-${ticker})`}
                 strokeWidth={2}
                 dot={false}
@@ -478,7 +487,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             {isSingleTicker && currentPrice && (
               <ReferenceLine
                 y={currentPrice}
-                stroke="#000000"
+                stroke={ct.seriesPrimary}
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 strokeOpacity={0.4}
@@ -488,7 +497,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             {/* End-of-chart bubbles (price + SMAs) sorted by value, highest on top */}
             {isSingleTicker && currentPrice && lastDate && (() => {
               const items: { value: number; label: string; color: string }[] = [
-                { value: currentPrice, label: formatPrice(currentPrice), color: '#000000' },
+                { value: currentPrice, label: formatPrice(currentPrice), color: ct.markerBg },
               ];
               if (show50SMA && lastSMA50 !== undefined) {
                 items.push({ value: lastSMA50, label: formatPrice(lastSMA50), color: '#dc2626' });

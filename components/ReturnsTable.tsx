@@ -32,17 +32,17 @@ function formatDate(date: string | null): string {
 }
 
 function getReturnColor(value: number | null): string {
-  if (value === null) return 'bg-gray-50';
+  if (value === null) return 'bg-panel-2';
   if (value > 0) return 'bg-emerald-600 text-white';
   if (value < 0) return 'bg-red-500 text-white';
-  return 'bg-gray-100';
+  return 'bg-panel-2';
 }
 
 function getReturnColorLight(value: number | null): string {
-  if (value === null) return 'bg-gray-50';
+  if (value === null) return 'bg-panel-2';
   if (value > 0) return 'bg-emerald-100 text-emerald-800';
   if (value < 0) return 'bg-red-100 text-red-800';
-  return 'bg-gray-100';
+  return 'bg-panel-2';
 }
 
 // Tooltip component for return cells
@@ -73,7 +73,7 @@ function ReturnCell({
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
           <div className="font-mono">{formatPrice(detail.endPrice)} / {formatPrice(detail.startPrice)} - 1</div>
           <div className="text-gray-300 mt-1">= {value.toFixed(2)}%</div>
-          <div className="text-gray-400 mt-1 text-[10px]">
+          <div className="text-subtle mt-1 text-[10px]">
             {formatDate(detail.startDate)} → {formatDate(detail.endDate)}
           </div>
         </div>
@@ -91,8 +91,8 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
   const sortedData = [...data].reverse();
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mt-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mt-4">
+      <h2 className="text-lg font-semibold text-content mb-4">
         {ticker} Monthly Returns
       </h2>
 
@@ -115,9 +115,9 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
             {sortedData.map((yearData, index) => (
               <tr
                 key={yearData.year}
-                className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                className={index % 2 === 0 ? 'bg-panel' : 'bg-panel-2'}
               >
-                <td className="px-2 py-1.5 font-medium text-gray-700 border-r border-gray-200">
+                <td className="px-2 py-1.5 font-medium text-content border-r border-line">
                   {yearData.year}
                 </td>
                 {yearData.monthlyReturns.map((ret, monthIndex) => (
@@ -125,18 +125,18 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
                     key={monthIndex}
                     value={ret}
                     detail={yearData.monthlyDetails[monthIndex]}
-                    className={`px-1 py-1.5 text-center border-r border-gray-100 ${getReturnColor(ret)}`}
+                    className={`px-1 py-1.5 text-center border-r border-line ${getReturnColor(ret)}`}
                   />
                 ))}
                 <ReturnCell
                   value={yearData.annualReturn}
                   detail={yearData.annualDetail}
-                  className={`px-2 py-1.5 text-center font-medium border-l-2 border-gray-300 ${getReturnColor(yearData.annualReturn)}`}
+                  className={`px-2 py-1.5 text-center font-medium border-l-2 border-line ${getReturnColor(yearData.annualReturn)}`}
                 />
                 <td className={`px-2 py-1.5 text-center ${getReturnColorLight(yearData.annualStd !== null ? 1 : null)}`}>
                   {formatStd(yearData.annualStd)}
                 </td>
-                <td className={`px-2 py-1.5 text-center ${yearData.maxDrawdown !== null && yearData.maxDrawdown > 0 ? 'bg-red-100 text-red-800' : 'bg-gray-50'}`}>
+                <td className={`px-2 py-1.5 text-center ${yearData.maxDrawdown !== null && yearData.maxDrawdown > 0 ? 'bg-red-100 text-red-800' : 'bg-panel-2'}`}>
                   {yearData.maxDrawdown !== null ? `-${yearData.maxDrawdown.toFixed(1)}%` : ''}
                 </td>
               </tr>
@@ -145,7 +145,7 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
         </table>
       </div>
 
-      <div className="mt-3 flex gap-4 text-xs text-gray-500">
+      <div className="mt-3 flex gap-4 text-xs text-muted">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-emerald-600 rounded"></div>
           <span>Positive return</span>
@@ -155,7 +155,7 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
           <span>Negative return</span>
         </div>
         <div className="flex items-center gap-1 ml-2">
-          <span className="text-gray-400">Hover over cells to see calculation details</span>
+          <span className="text-subtle">Hover over cells to see calculation details</span>
         </div>
       </div>
     </div>

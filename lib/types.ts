@@ -60,6 +60,10 @@ export interface ApiResponse {
   success: boolean;
   data?: TickerData[];
   error?: string;
+  /** Stooq only: set when a human must solve a CAPTCHA before data can be fetched. */
+  captchaRequired?: boolean;
+  /** Stooq only: session token to use with the CAPTCHA endpoints and the retry request. */
+  sessionToken?: string;
 }
 
 // Trend Following Strategy Types

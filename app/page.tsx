@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import TickerInput from '@/components/TickerInput';
+import TickerInput, { DataSource } from '@/components/TickerInput';
+import CaptchaModal from '@/components/CaptchaModal';
+import ThemeToggle from '@/components/ThemeToggle';
 import PriceChart from '@/components/PriceChart';
 import StatsPanel from '@/components/StatsPanel';
 import DateRangeFilter from '@/components/DateRangeFilter';
@@ -38,6 +40,12 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedTickerIndex, setFocusedTickerIndex] = useState(0);
+  const [source, setSource] = useState<DataSource>('yahoo');
+
+  // Stooq CAPTCHA flow state
+  const [stooqSession, setStooqSession] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [pendingTickers, setPendingTickers] = useState<string[] | null>(null);
 
   // Filter data based on selected date range
   const filteredTickersData = useMemo<TickerData[]>(() => {
@@ -76,37 +84,76 @@ export default function Home() {
     return result.years;
   }, [filteredTickersData, focusedTickerIndex]);
 
-  const handleSubmit = async (tickers: string[]) => {
-    setIsLoading(true);
-    setError(null);
+  // Core loader. For Stooq it may return a "captcha required" result, in which
+  // case we open the CAPTCHA modal and retry once solved (see handleCaptchaSolved).
+  const loadTickers = useCallback(
+    async (tickers: string[], selectedSource: DataSource, sessionToken?: string | null) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const response = await fetch(`/api/stooq?tickers=${encodeURIComponent(tickers.join(','))}`);
-      const result: ApiResponse = await response.json();
+      try {
+        const params = new URLSearchParams({
+          tickers: tickers.join(','),
+          source: selectedSource,
+        });
+        if (selectedSource === 'stooq' && sessionToken) {
+          params.set('session', sessionToken);
+        }
 
-      if (!result.success || !result.data) {
-        throw new Error(result.error || 'Failed to fetch data');
+        const response = await fetch(`/api/stooq?${params.toString()}`);
+        const result: ApiResponse = await response.json();
+
+        // Stooq needs a human CAPTCHA — remember the request and open the modal.
+        if (result.captchaRequired && result.sessionToken) {
+          setPendingTickers(tickers);
+          setCaptchaToken(result.sessionToken);
+          setIsLoading(false);
+          return;
+        }
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || 'Failed to fetch data');
+        }
+
+        const data = result.data;
+        setRawTickersData(data);
+        setFocusedTickerIndex(0);
+
+        const { minDate, maxDate } = getDateRange(data);
+        setAvailableDateRange({ minDate, maxDate });
+        setDateRange({ start: minDate, end: maxDate });
+      } catch (err) {
+        console.error('Error:', err);
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+        setRawTickersData([]);
+        setAvailableDateRange({ minDate: '', maxDate: '' });
+        setDateRange({ start: '', end: '' });
+      } finally {
+        setIsLoading(false);
       }
+    },
+    []
+  );
 
-      const data = result.data;
-      setRawTickersData(data);
-      setFocusedTickerIndex(0);
+  const handleSubmit = (tickers: string[], selectedSource: DataSource) => {
+    loadTickers(tickers, selectedSource, stooqSession);
+  };
 
-      // Calculate available date range
-      const { minDate, maxDate } = getDateRange(data);
-      setAvailableDateRange({ minDate, maxDate });
-
-      // Initialize date range to full range
-      setDateRange({ start: minDate, end: maxDate });
-    } catch (err) {
-      console.error('Error:', err);
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-      setRawTickersData([]);
-      setAvailableDateRange({ minDate: '', maxDate: '' });
-      setDateRange({ start: '', end: '' });
-    } finally {
-      setIsLoading(false);
+  // CAPTCHA solved: session is now unlocked — keep the token and retry the request.
+  const handleCaptchaSolved = () => {
+    const token = captchaToken;
+    const tickers = pendingTickers;
+    setCaptchaToken(null);
+    setPendingTickers(null);
+    setStooqSession(token);
+    if (tickers && token) {
+      loadTickers(tickers, 'stooq', token);
     }
+  };
+
+  const handleCaptchaCancel = () => {
+    setCaptchaToken(null);
+    setPendingTickers(null);
   };
 
   const handleDateRangeChange = useCallback((startDate: string, endDate: string) => {
@@ -123,19 +170,36 @@ export default function Home() {
   const rawFocusedData = rawTickersData[focusedIdx]?.data || [];
 
   return (
-    <main className="min-h-screen bg-gray-100">
+    <main className="min-h-screen bg-app">
+      {/* Stooq CAPTCHA modal */}
+      {captchaToken && (
+        <CaptchaModal
+          sessionToken={captchaToken}
+          onSolved={handleCaptchaSolved}
+          onCancel={handleCaptchaCancel}
+        />
+      )}
+
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Stooq Analyzer</h1>
-          <p className="text-sm text-gray-500">Stock and asset analytics with comprehensive statistics</p>
+      <header className="bg-panel shadow-sm border-b border-line">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-content">Stooq Analyzer</h1>
+            <p className="text-sm text-muted">Stock and asset analytics with comprehensive statistics</p>
+          </div>
+          <ThemeToggle />
         </div>
       </header>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Ticker Input */}
-        <TickerInput onSubmit={handleSubmit} isLoading={isLoading} />
+        <TickerInput
+          onSubmit={handleSubmit}
+          isLoading={isLoading}
+          source={source}
+          onSourceChange={setSource}
+        />
 
         {/* Date Range Filter - Only show when data is loaded */}
         {hasData && (
@@ -193,11 +257,11 @@ export default function Home() {
         {/* Focus asset selector - Only for multi-ticker */}
         {tickers.length > 1 && (
           <div className="mt-4 mb-2 flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Focus asset:</label>
+            <label className="text-sm font-medium text-content">Focus asset:</label>
             <select
               value={focusedTickerIndex}
               onChange={(e) => setFocusedTickerIndex(Number(e.target.value))}
-              className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm border border-line rounded px-2 py-1 bg-panel focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {tickers.map((t, i) => (
                 <option key={t} value={i}>{t}</option>
@@ -231,9 +295,18 @@ export default function Home() {
         )}
 
         {/* Footer Info */}
-        <footer className="mt-8 text-center text-sm text-gray-500">
+        <footer className="mt-8 text-center text-sm text-muted">
           <p>
             Data provided by{' '}
+            <a
+              href="https://finance.yahoo.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              Yahoo Finance
+            </a>{' '}
+            and{' '}
             <a
               href="https://stooq.pl"
               target="_blank"
@@ -244,7 +317,9 @@ export default function Home() {
             </a>
           </p>
           <p className="mt-1">
-            Ticker examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)
+            {source === 'yahoo'
+              ? 'Yahoo examples: KGH.WA (Polish stocks), USDPLN=X (FX), BTC-USD (crypto), IWDA.L (ETFs)'
+              : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>
       </div>

@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import { useMemo } from 'react';
 import { DrawdownDataPoint } from '@/lib/statistics';
+import { useTheme } from '@/components/ThemeProvider';
+import { getChartTheme } from '@/lib/chartTheme';
 import DateAxisTick from './DateAxisTick';
 
 interface MultiDrawdownData {
@@ -38,9 +40,11 @@ interface DrawdownChartProps {
 function DrawdownLabel({
   viewBox,
   value,
+  color = '#000000',
 }: {
   viewBox?: { x: number; y: number };
   value: string;
+  color?: string;
 }) {
   if (!viewBox) return null;
   const { x, y } = viewBox;
@@ -49,7 +53,7 @@ function DrawdownLabel({
     <text
       x={x - 10}
       y={y + 4}
-      fill="#000000"
+      fill={color}
       fontSize={10}
       fontWeight="500"
       textAnchor="end"
@@ -63,9 +67,11 @@ function DrawdownLabel({
 function CurrentDrawdownBubble({
   viewBox,
   value,
+  color = '#000000',
 }: {
   viewBox?: { x: number; y: number; width: number };
   value: string;
+  color?: string;
 }) {
   if (!viewBox) return null;
   const { x, y } = viewBox;
@@ -81,7 +87,7 @@ function CurrentDrawdownBubble({
         width={bubbleWidth}
         height={20}
         rx={4}
-        fill="#000000"
+        fill={color}
       />
       <text
         x={bubbleX + bubbleWidth / 2}
@@ -108,6 +114,8 @@ export default function DrawdownChart({
   resolvedTicks,
   multiData,
 }: DrawdownChartProps) {
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
   const isMulti = multiData && multiData.length > 0;
 
   // Merge multi-ticker drawdown data into a single dataset
@@ -178,8 +186,8 @@ export default function DrawdownChart({
               ))
             ) : (
               <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#000000" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#000000" stopOpacity={0.1} />
+                <stop offset="5%" stopColor={ct.seriesPrimary} stopOpacity={0.4} />
+                <stop offset="95%" stopColor={ct.seriesPrimary} stopOpacity={0.1} />
               </linearGradient>
             )}
           </defs>
@@ -233,11 +241,11 @@ export default function DrawdownChart({
               <Area
                 type="monotone"
                 dataKey="drawdown"
-                stroke="#000000"
+                stroke={ct.seriesPrimary}
                 fill="url(#drawdownGradient)"
                 strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 3, fill: '#000000' }}
+                activeDot={{ r: 3, fill: ct.seriesPrimary }}
               />
 
               {/* Max drawdown marker with label */}
@@ -245,13 +253,13 @@ export default function DrawdownChart({
                 x={maxDrawdownDate}
                 y={-maxDrawdown}
                 r={4}
-                fill="#000000"
+                fill={ct.seriesPrimary}
                 stroke="white"
                 strokeWidth={2}
               >
                 <Label
                   content={
-                    <DrawdownLabel value={formatDrawdown(-maxDrawdown)} />
+                    <DrawdownLabel value={formatDrawdown(-maxDrawdown)} color={ct.seriesPrimary} />
                   }
                 />
               </ReferenceDot>
@@ -264,7 +272,7 @@ export default function DrawdownChart({
               >
                 <Label
                   content={
-                    <CurrentDrawdownBubble value={formatDrawdown(lastDrawdown)} />
+                    <CurrentDrawdownBubble value={formatDrawdown(lastDrawdown)} color={ct.markerBg} />
                   }
                 />
               </ReferenceDot>

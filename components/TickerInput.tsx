@@ -2,12 +2,45 @@
 
 import { useState, FormEvent } from 'react';
 
+export type DataSource = 'stooq' | 'yahoo';
+
 interface TickerInputProps {
-  onSubmit: (tickers: string[]) => void;
+  onSubmit: (tickers: string[], source: DataSource) => void;
   isLoading: boolean;
+  source: DataSource;
+  onSourceChange: (source: DataSource) => void;
 }
 
-export default function TickerInput({ onSubmit, isLoading }: TickerInputProps) {
+const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
+  stooq: [
+    { label: 'USDPLN', value: 'USDPLN' },
+    { label: 'WIG20', value: 'WIG20' },
+    { label: 'BTC.V', value: 'BTC.V' },
+    { label: 'IWDA.UK', value: 'IWDA.UK' },
+    { label: 'VWRA.UK', value: 'VWRA.UK' },
+    { label: 'EIMI.UK', value: 'EIMI.UK' },
+    { label: 'CSPX.UK', value: 'CSPX.UK' },
+    { label: 'VDTA.UK', value: 'VDTA.UK' },
+    { label: 'ETFBM40TR.PL', value: 'ETFBM40TR.PL' },
+  ],
+  yahoo: [
+    { label: 'KGH.WA', value: 'KGH.WA' },
+    { label: 'PKO.WA', value: 'PKO.WA' },
+    { label: 'ETFBW20ST.WA', value: 'ETFBW20ST.WA' },
+    { label: 'USDPLN=X', value: 'USDPLN=X' },
+    { label: 'BTC-USD', value: 'BTC-USD' },
+    { label: 'IWDA.L', value: 'IWDA.L' },
+    { label: 'CSPX.L', value: 'CSPX.L' },
+    { label: 'AAPL', value: 'AAPL' },
+  ],
+};
+
+export default function TickerInput({
+  onSubmit,
+  isLoading,
+  source,
+  onSourceChange,
+}: TickerInputProps) {
   const [inputValue, setInputValue] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
@@ -18,32 +51,54 @@ export default function TickerInput({ onSubmit, isLoading }: TickerInputProps) {
       .filter(t => t.length > 0);
 
     if (tickers.length > 0) {
-      onSubmit(tickers);
+      onSubmit(tickers, source);
     }
   };
 
-  const examples = [
-    { label: 'USDPLN', value: 'USDPLN' },
-    { label: 'WIG20', value: 'WIG20' },
-    { label: 'BTC.V', value: 'BTC.V' },
-    { label: 'IWDA.UK', value: 'IWDA.UK' },
-    { label: 'VWRA.UK', value: 'VWRA.UK' },
-    { label: 'EIMI.UK', value: 'EIMI.UK' },
-    { label: 'CSPX.UK', value: 'CSPX.UK' },
-    { label: 'VDTA.UK', value: 'VDTA.UK' },
-    { label: 'ETFBM40TR.PL', value: 'ETFBM40TR.PL' },
-  ];
+  const examples = EXAMPLES[source];
+
+  const placeholder =
+    source === 'yahoo'
+      ? 'Enter Yahoo symbols (e.g., KGH.WA, USDPLN=X, BTC-USD)'
+      : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mb-4">
+      {/* Source switch */}
+      <div className="mb-3 flex items-center gap-3">
+        <span className="text-sm font-medium text-content">Data source:</span>
+        <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
+          {(['stooq', 'yahoo'] as DataSource[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onSourceChange(s)}
+              disabled={isLoading}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
+                source === s
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-muted hover:text-content'
+              }`}
+            >
+              {s === 'stooq' ? 'Stooq' : 'Yahoo Finance'}
+            </button>
+          ))}
+        </div>
+        {source === 'stooq' && (
+          <span className="text-xs text-amber-600">
+            ⚠ Stooq requires a one-time CAPTCHA per session — you&apos;ll be prompted to solve it.
+          </span>
+        )}
+      </div>
+
       <form onSubmit={handleSubmit} className="flex gap-3">
         <div className="flex-1">
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder={placeholder}
+            className="w-full px-4 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={isLoading}
           />
         </div>
@@ -78,13 +133,13 @@ export default function TickerInput({ onSubmit, isLoading }: TickerInputProps) {
         </button>
       </form>
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className="text-sm text-gray-500">Quick examples:</span>
+        <span className="text-sm text-muted">Quick examples:</span>
         {examples.map((example) => (
           <button
             key={example.value}
             type="button"
             onClick={() => setInputValue(example.value)}
-            className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700 transition-colors"
+            className="text-sm px-3 py-1 bg-panel-2 hover:bg-panel-3 rounded-full text-content transition-colors"
           >
             {example.label}
           </button>

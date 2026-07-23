@@ -92,10 +92,10 @@ export default function DateRangeFilter({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mb-4">
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">From:</label>
+          <label className="text-sm font-medium text-content">From:</label>
           <input
             type="date"
             value={localStart}
@@ -103,12 +103,12 @@ export default function DateRangeFilter({
             max={localEnd}
             onChange={(e) => handleStartChange(e.target.value)}
             disabled={disabled}
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="px-3 py-1.5 border border-line rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-panel-2"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">To:</label>
+          <label className="text-sm font-medium text-content">To:</label>
           <input
             type="date"
             value={localEnd}
@@ -116,14 +116,14 @@ export default function DateRangeFilter({
             max={maxDate}
             onChange={(e) => handleEndChange(e.target.value)}
             disabled={disabled}
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="px-3 py-1.5 border border-line rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-panel-2"
           />
         </div>
 
         <button
           onClick={handleReset}
           disabled={disabled}
-          className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+          className="px-3 py-1.5 text-sm bg-panel-2 hover:bg-panel-3 rounded-md transition-colors disabled:opacity-50"
         >
           Reset
         </button>
@@ -131,7 +131,7 @@ export default function DateRangeFilter({
         <div className="h-6 w-px bg-gray-300"></div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="text-sm text-gray-500 self-center">Quick:</span>
+          <span className="text-sm text-muted self-center">Quick:</span>
           {[
             { label: '1M', action: () => applyPreset(1) },
             { label: '3M', action: () => applyPreset(3) },
@@ -147,7 +147,7 @@ export default function DateRangeFilter({
               key={preset.label}
               onClick={preset.action}
               disabled={disabled}
-              className="px-2 py-1 text-xs bg-gray-100 hover:bg-blue-100 hover:text-blue-700 rounded transition-colors disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-panel-2 hover:bg-blue-100 hover:text-blue-700 rounded transition-colors disabled:opacity-50"
             >
               {preset.label}
             </button>

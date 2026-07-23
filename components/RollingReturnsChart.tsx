@@ -42,8 +42,9 @@ function RollingReturnTooltip({ active, payload, rollingYears }: any) {
   return (
     <div
       style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--chart-tooltip-bg)',
+        color: 'var(--content)',
+        border: '1px solid var(--chart-tooltip-border)',
         borderRadius: '8px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         padding: '8px 12px',
@@ -109,15 +110,15 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
   const lastPoint = rollingData[rollingData.length - 1];
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mt-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mt-4">
       {/* Header */}
       <div className="mb-4">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-content">
             {ticker} Rolling {rollingYears}Y Returns (CAGR)
           </h2>
         </div>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-muted mt-1">
           Annualized return over rolling {rollingYears}-year windows.
         </p>
       </div>
@@ -125,11 +126,11 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
       {/* Controls */}
       <div className="flex flex-wrap gap-4 mb-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Rolling Years:</label>
+          <label className="text-sm text-muted">Rolling Years:</label>
           <select
             value={rollingYears}
             onChange={(e) => setRollingYears(parseInt(e.target.value))}
-            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-line rounded px-2 py-1 bg-panel focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {ROLLING_YEAR_OPTIONS.map((y) => (
               <option key={y} value={y}>

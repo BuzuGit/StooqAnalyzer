@@ -34,12 +34,12 @@ function CollapsibleSection({ title, children, defaultOpen = true }: Collapsible
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-b border-gray-200 last:border-b-0">
+    <div className="border-b border-line last:border-b-0">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between py-2 px-3 bg-gray-100 hover:bg-gray-200 transition-colors"
+        className="w-full flex items-center justify-between py-2 px-3 bg-panel-2 hover:bg-panel-3 transition-colors"
       >
-        <span className="font-semibold text-sm text-gray-700">{title}</span>
+        <span className="font-semibold text-sm text-content">{title}</span>
         <svg
           className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -49,7 +49,7 @@ function CollapsibleSection({ title, children, defaultOpen = true }: Collapsible
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {isOpen && <div className="p-3 bg-white">{children}</div>}
+      {isOpen && <div className="p-3 bg-panel">{children}</div>}
     </div>
   );
 }
@@ -62,13 +62,13 @@ interface StatRowProps {
 }
 
 function StatRow({ label, value, isNegative, isPositive }: StatRowProps) {
-  let valueColor = 'text-gray-900';
+  let valueColor = 'text-content';
   if (isNegative) valueColor = 'text-red-600';
   if (isPositive) valueColor = 'text-green-600';
 
   return (
     <div className="flex justify-between items-center py-1 text-sm">
-      <span className="text-gray-600">{label}</span>
+      <span className="text-muted">{label}</span>
       <span className={`font-medium ${valueColor}`}>{value}</span>
     </div>
   );
@@ -89,14 +89,14 @@ function formatDate(dateStr: string): string {
 export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
   if (isLoading) {
     return (
-      <div className="bg-gray-50 rounded-lg shadow-md overflow-hidden">
+      <div className="bg-panel-2 rounded-lg shadow-md overflow-hidden">
         <div className="p-4">
           <div className="animate-pulse space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="space-y-2">
                 <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-                <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-panel-3 rounded w-full"></div>
+                <div className="h-3 bg-panel-3 rounded w-3/4"></div>
               </div>
             ))}
           </div>
@@ -107,8 +107,8 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
 
   if (statistics.length === 0) {
     return (
-      <div className="bg-gray-50 rounded-lg shadow-md p-4">
-        <p className="text-gray-500 text-sm text-center">
+      <div className="bg-panel-2 rounded-lg shadow-md p-4">
+        <p className="text-muted text-sm text-center">
           Statistics will appear here after loading data
         </p>
       </div>
@@ -116,9 +116,9 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
   }
 
   return (
-    <div className="bg-gray-50 rounded-lg shadow-md overflow-hidden custom-scrollbar max-h-[calc(100vh-200px)] overflow-y-auto">
+    <div className="bg-panel-2 rounded-lg shadow-md overflow-hidden custom-scrollbar max-h-[calc(100vh-200px)] overflow-y-auto">
       {statistics.map((stats, index) => (
-        <div key={stats.ticker} className={index > 0 ? 'border-t-4 border-gray-300' : ''}>
+        <div key={stats.ticker} className={index > 0 ? 'border-t-4 border-line' : ''}>
           {/* Ticker Header */}
           <div className="bg-blue-600 text-white py-2 px-3">
             <h3 className="font-bold text-lg">{stats.ticker}</h3>

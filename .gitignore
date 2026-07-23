@@ -38,6 +38,9 @@ next-env.d.ts
 # Windows reserved names
 nul
 
+# Large local data dump (not part of the app)
+_ul
+
 # Screenshots and examples
 *.jpg
 *.png

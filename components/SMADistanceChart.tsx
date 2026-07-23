@@ -148,14 +148,14 @@ export default function SMADistanceChart({
     <div>
       {/* Header with toggle */}
       <div className="flex items-center gap-2 mt-2 mb-1 ml-1">
-        <span className="text-xs text-gray-500">Distance from</span>
+        <span className="text-xs text-muted">Distance from</span>
         <div className="flex gap-1">
           <button
             onClick={smaPeriod === 200 ? onTogglePeriod : undefined}
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               smaPeriod === 50
                 ? 'bg-gray-800 text-white'
-                : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
             }`}
           >
             50 SMA
@@ -165,7 +165,7 @@ export default function SMADistanceChart({
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               smaPeriod === 200
                 ? 'bg-gray-800 text-white'
-                : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
             }`}
           >
             200 SMA

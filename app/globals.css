@@ -3,13 +3,76 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
+  /* Light theme */
+  --app: #f3f4f6;
+  --panel: #ffffff;
+  --panel-2: #f3f4f6;
+  --panel-3: #e5e7eb;
+  --line: #d1d5db;
+  --content: #111827;
+  --muted: #6b7280;
+  --subtle: #9ca3af;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+
+  /* Chart tokens (consumed in JS via getChartTheme) */
+  --chart-grid: #e5e7eb;
+  --chart-axis: #6b7280;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #d1d5db;
+}
+
+.dark {
+  /* Dark theme — near-black, muted grays, amber accent (Bloomberg-like) */
+  --app: #000000;
+  --panel: #0e0e0e;
+  --panel-2: #1a1a1a;
+  --panel-3: #262626;
+  --line: #2a2a2a;
+  --content: #e6e6e6;
+  --muted: #8a8a8a;
+  --subtle: #6b7280;
+  --accent: #f5a623;
+  --accent-hover: #e0951a;
+
+  --chart-grid: #1f1f1f;
+  --chart-axis: #8a8a8a;
+  --chart-tooltip-bg: #111111;
+  --chart-tooltip-border: #2a2a2a;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+  color: var(--content);
+  background: var(--app);
+}
+
+/* ---- Recharts dark-mode theming ----
+   CSS overrides presentation attributes, so these retheme every chart's grid,
+   axis text, and tooltip at once without touching each chart component. */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: var(--chart-grid);
+}
+
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-cartesian-axis-tick-value tspan {
+  fill: var(--chart-axis);
+}
+
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis-tick-line {
+  stroke: var(--line);
+}
+
+.dark .recharts-default-tooltip {
+  background-color: var(--chart-tooltip-bg) !important;
+  border-color: var(--chart-tooltip-border) !important;
+  color: var(--content) !important;
+}
+
+.dark .recharts-tooltip-label,
+.dark .recharts-tooltip-item {
+  color: var(--content) !important;
 }
 
 /* Custom scrollbar for stats panel */
@@ -18,14 +81,14 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--panel-2);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--panel-3);
   border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: var(--muted);
 }

@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseStooqCSV } from '@/lib/stooq';
+import {
+  ensureStooqSession,
+  fetchStooqData,
+  StooqBlockedError,
+  StooqCaptchaRequiredError,
+} from '@/lib/stooq';
+import { fetchYahooData } from '@/lib/yahoo';
 import { ApiResponse, TickerData } from '@/lib/types';
 
-const STOOQ_BASE_URL = 'https://stooq.pl/q/d/l/';
+type DataSource = 'stooq' | 'yahoo';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const tickersParam = searchParams.get('tickers');
+  const source: DataSource = searchParams.get('source') === 'stooq' ? 'stooq' : 'yahoo';
+  const sessionToken = searchParams.get('session') || undefined;
 
   if (!tickersParam) {
     return NextResponse.json<ApiResponse>(
@@ -36,42 +44,17 @@ export async function GET(request: NextRequest) {
   try {
     const results: TickerData[] = [];
 
+    // Stooq needs a CAPTCHA-unlocked session before any download.
+    let token = sessionToken;
+    if (source === 'stooq') {
+      token = await ensureStooqSession(sessionToken);
+    }
+
     for (const ticker of tickers) {
-      let url = `${STOOQ_BASE_URL}?s=${encodeURIComponent(ticker.toLowerCase())}&d1=19000101&d2=20301231&i=d`;
-      if (apiKey) {
-        url += `&apikey=${encodeURIComponent(apiKey)}`;
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      });
-
-      if (!response.ok) {
-        return NextResponse.json<ApiResponse>(
-          { success: false, error: `Failed to fetch data for ${ticker}: ${response.statusText}` },
-          { status: 502 }
-        );
-      }
-
-      const csvText = await response.text();
-
-      if (!csvText || csvText.trim().length === 0 || csvText.includes('Brak danych')) {
-        return NextResponse.json<ApiResponse>(
-          { success: false, error: `No data available for ticker: ${ticker}` },
-          { status: 404 }
-        );
-      }
-
-      if (csvText.includes('apikey') || csvText.includes('Uzyskaj')) {
-        return NextResponse.json<ApiResponse>(
-          { success: false, error: 'Stooq API key is missing or invalid. Add STOOQ_API_KEY to .env.local' },
-          { status: 401 }
-        );
-      }
-
-      const data = parseStooqCSV(csvText, ticker);
+      const data =
+        source === 'yahoo'
+          ? await fetchYahooData(ticker)
+          : await fetchStooqData(ticker, token!, apiKey);
 
       if (data.length === 0) {
         return NextResponse.json<ApiResponse>(
@@ -91,7 +74,28 @@ export async function GET(request: NextRequest) {
       data: results,
     });
   } catch (error) {
-    console.error('Error fetching stooq data:', error);
+    console.error('Error fetching market data:', error);
+
+    // Stooq needs a human to solve a CAPTCHA — tell the client how to do it.
+    if (error instanceof StooqCaptchaRequiredError) {
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          captchaRequired: true,
+          sessionToken: error.token,
+          error: 'Stooq requires solving a CAPTCHA to download data.',
+        },
+        { status: 200 }
+      );
+    }
+
+    if (error instanceof StooqBlockedError) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: error.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json<ApiResponse>(
       {
         success: false,

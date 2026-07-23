@@ -67,8 +67,9 @@ function GrowthTooltip({ active, payload, label }: any) {
   return (
     <div
       style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--chart-tooltip-bg)',
+        color: 'var(--content)',
+        border: '1px solid var(--chart-tooltip-border)',
         borderRadius: '8px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         padding: '8px 12px',
@@ -111,8 +112,9 @@ function DrawdownTooltip({ active, payload, label }: any) {
   return (
     <div
       style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
+        backgroundColor: 'var(--chart-tooltip-bg)',
+        color: 'var(--content)',
+        border: '1px solid var(--chart-tooltip-border)',
         borderRadius: '8px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         padding: '8px 12px',
@@ -166,18 +168,18 @@ function StatRow({
   const isTrendBetter = !isBuyHoldBetter && buyHold !== trendFollowing;
 
   return (
-    <tr className="border-b border-gray-100 last:border-b-0">
-      <td className="py-2 px-3 text-gray-600 text-sm">{label}</td>
+    <tr className="border-b border-line last:border-b-0">
+      <td className="py-2 px-3 text-muted text-sm">{label}</td>
       <td
         className={`py-2 px-3 text-sm text-right font-medium ${
-          isBuyHoldBetter ? 'text-blue-600' : 'text-gray-700'
+          isBuyHoldBetter ? 'text-blue-600' : 'text-content'
         }`}
       >
         {formatValue(buyHold)}
       </td>
       <td
         className={`py-2 px-3 text-sm text-right font-medium ${
-          isTrendBetter ? 'text-green-600' : 'text-gray-700'
+          isTrendBetter ? 'text-green-600' : 'text-content'
         }`}
       >
         {formatValue(trendFollowing)}
@@ -297,29 +299,29 @@ export default function TrendFollowingSection({
   const signalChanges = signalDates.slice(-20); // Show last 20 signal changes max
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mt-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mt-4">
       {/* Header */}
       <div className="mb-4">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-content">
             {ticker} Buy & Hold vs Trend Following (10m-SMA)
           </h2>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted">
             {displayDateRange}
           </span>
         </div>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-muted mt-1">
           Growth of $1 comparing passive investing to a 10-month moving average strategy.
         </p>
         {/* Signal Statistics */}
         <div className="flex flex-wrap gap-4 mt-2 text-sm">
-          <div className="font-medium text-gray-700">
+          <div className="font-medium text-content">
             Signals: <span className="text-green-600">{signalStats.buySignals} buy</span>, <span className="text-red-600">{signalStats.sellSignals} sell</span>
           </div>
           {signalStats.successRate !== null && (
-            <div className="font-medium text-gray-700">
+            <div className="font-medium text-content">
               Success rate: {signalStats.successRate.toFixed(0)}%
-              <span className="text-gray-500 font-normal ml-1">
+              <span className="text-muted font-normal ml-1">
                 ({signalStats.successfulRoundTrips} of {signalStats.totalRoundTrips})
               </span>
             </div>
@@ -330,11 +332,11 @@ export default function TrendFollowingSection({
       {/* Parameter Controls */}
       <div className="flex flex-wrap gap-4 mb-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Risk-free rate:</label>
+          <label className="text-sm text-muted">Risk-free rate:</label>
           <select
             value={riskFreeRate}
             onChange={(e) => setRiskFreeRate(parseFloat(e.target.value))}
-            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-line rounded px-2 py-1 bg-panel focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {RISK_FREE_RATE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -344,11 +346,11 @@ export default function TrendFollowingSection({
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Commission:</label>
+          <label className="text-sm text-muted">Commission:</label>
           <select
             value={commission}
             onChange={(e) => setCommission(parseFloat(e.target.value))}
-            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-line rounded px-2 py-1 bg-panel focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {COMMISSION_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -363,23 +365,23 @@ export default function TrendFollowingSection({
       <div className="flex flex-wrap gap-4 mb-4 text-xs">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-blue-600"></div>
-          <span className="text-gray-600">Buy & Hold</span>
+          <span className="text-muted">Buy & Hold</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-green-600"></div>
-          <span className="text-gray-600">Trend Following</span>
+          <span className="text-muted">Trend Following</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-gray-400" style={{ borderTop: '1px dashed #9ca3af' }}></div>
-          <span className="text-gray-600">10m-SMA</span>
+          <span className="text-muted">10m-SMA</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          <span className="text-gray-600">Buy Signal</span>
+          <span className="text-muted">Buy Signal</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-red-500"></div>
-          <span className="text-gray-600">Sell Signal</span>
+          <span className="text-muted">Sell Signal</span>
         </div>
       </div>
 
@@ -532,15 +534,15 @@ export default function TrendFollowingSection({
         <div className="flex-1">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="py-2 px-3 text-left font-medium text-gray-700">Metric</th>
+              <tr className="bg-panel-2">
+                <th className="py-2 px-3 text-left font-medium text-content">Metric</th>
                 <th className="py-2 px-3 text-right font-medium text-blue-600">Buy & Hold</th>
                 <th className="py-2 px-3 text-right font-medium text-green-600">
                   Trend Following
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white">
+            <tbody className="bg-panel">
               <StatRow
                 label="Final Amount"
                 buyHold={buyHoldStats.finalAmount}
@@ -596,8 +598,8 @@ export default function TrendFollowingSection({
 
         {/* Current Signal Indicator */}
         <div className="lg:w-48">
-          <div className="bg-gray-50 rounded-lg p-4 h-full flex flex-col justify-center">
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">
+          <div className="bg-panel-2 rounded-lg p-4 h-full flex flex-col justify-center">
+            <div className="text-xs text-muted uppercase tracking-wide mb-2">
               Current Signal
             </div>
             <div
@@ -607,7 +609,7 @@ export default function TrendFollowingSection({
             >
               {currentSignal === 'BUY' ? 'INVESTED' : 'OUT OF MARKET'}
             </div>
-            <div className="text-xs text-gray-500 mt-2">
+            <div className="text-xs text-muted mt-2">
               Strategy earns{' '}
               {currentSignal === 'BUY' ? 'market returns' : `${(riskFreeRate * 100).toFixed(1)}% annual (risk-free)`} when{' '}
               {currentSignal === 'BUY' ? 'invested' : 'out'}
@@ -617,7 +619,7 @@ export default function TrendFollowingSection({
       </div>
 
       {/* Footer note */}
-      <div className="mt-4 text-xs text-gray-500">
+      <div className="mt-4 text-xs text-muted">
         Strategy: Buy when price {'>'} 10-month SMA at month-end, sell when price {'<'} 10-month
         SMA. When out of market, earns {(riskFreeRate * 100).toFixed(1)}% annual risk-free rate.
         {commission > 0 && ` Commission of ${(commission * 100).toFixed(2)}% applied on each signal change.`}

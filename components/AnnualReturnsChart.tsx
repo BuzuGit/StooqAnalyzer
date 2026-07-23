@@ -19,6 +19,7 @@ import {
   flattenMonthlyReturns,
   calculateQuarterlyReturns,
 } from '@/lib/statistics';
+import { useTheme } from '@/components/ThemeProvider';
 
 type ViewMode = 'monthly' | 'quarterly' | 'annual';
 
@@ -40,8 +41,10 @@ function CustomXAxisTick(props: {
   y?: number;
   payload?: { value: number };
   chartData: ChartDataPoint[];
+  yearColor?: string;
+  athColor?: string;
 }) {
-  const { x, y, payload, chartData } = props;
+  const { x, y, payload, chartData, yearColor = '#6b7280', athColor = '#166534' } = props;
   if (x === undefined || y === undefined || !payload) {
     return null;
   }
@@ -54,7 +57,7 @@ function CustomXAxisTick(props: {
       <text
         x={x}
         y={y + 12}
-        fill="#6b7280"
+        fill={yearColor}
         textAnchor="middle"
         fontSize={11}
       >
@@ -64,7 +67,7 @@ function CustomXAxisTick(props: {
         <text
           x={x}
           y={y + 28}
-          fill="#166534"
+          fill={athColor}
           textAnchor="middle"
           fontSize={12}
           fontWeight="600"
@@ -82,6 +85,7 @@ function BarLabel(props: Record<string, unknown>) {
   const y = props.y as number | undefined;
   const width = props.width as number | undefined;
   const value = props.value as number | null | undefined;
+  const color = (props.color as string | undefined) ?? '#000';
 
   if (x === undefined || y === undefined || width === undefined || value === null || value === undefined) {
     return <g />;
@@ -97,7 +101,7 @@ function BarLabel(props: Record<string, unknown>) {
     <text
       x={x + width / 2}
       y={labelY}
-      fill="#000"
+      fill={color}
       textAnchor="middle"
       fontSize={10}
       fontWeight="500"
@@ -116,6 +120,7 @@ function PeriodicBarLabel(props: Record<string, unknown>) {
   const height = props.height as number | undefined;
   const value = props.value as number | null | undefined;
   const barCount = (props as { barCount?: number }).barCount || 0;
+  const positiveColor = (props as { color?: string }).color ?? '#000';
 
   if (x === undefined || y === undefined || width === undefined || value === null || value === undefined) {
     return <g />;
@@ -138,7 +143,7 @@ function PeriodicBarLabel(props: Record<string, unknown>) {
     <text
       x={x + width / 2}
       y={labelY}
-      fill={isPositive ? '#000' : '#dc2626'}
+      fill={isPositive ? positiveColor : '#dc2626'}
       textAnchor="middle"
       fontSize={barCount > 30 ? 7 : barCount > 20 ? 8 : 9}
       fontWeight="500"
@@ -150,6 +155,16 @@ function PeriodicBarLabel(props: Record<string, unknown>) {
 
 export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('annual');
+
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  // Positive bars were a near-black gray (#1f2937) that vanished on the dark
+  // background — use a lighter slate in dark mode. Their value labels (drawn on
+  // the chart background above the bar) likewise need a light color in dark.
+  const barColor = isDark ? '#94a3b8' : '#1f2937';
+  const barLabelColor = isDark ? '#e6e6e6' : '#000';
+  const yearColor = isDark ? '#9ca3af' : '#6b7280';
+  const athColor = isDark ? '#4ade80' : '#166534';
 
   // Transform annual data for the chart
   const annualChartData: ChartDataPoint[] = useMemo(() =>
@@ -201,7 +216,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis
             dataKey="year"
-            tick={(props) => <CustomXAxisTick {...props} chartData={annualChartData} />}
+            tick={(props) => <CustomXAxisTick {...props} chartData={annualChartData} yearColor={yearColor} athColor={athColor} />}
             tickLine={false}
             height={45}
           />
@@ -236,19 +251,19 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
           {/* Annual return bars */}
           <Bar
             dataKey="annualReturn"
-            fill="#1f2937"
+            fill={barColor}
             radius={[2, 2, 0, 0]}
             maxBarSize={40}
           >
             {annualChartData.map((_entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill="#1f2937"
+                fill={barColor}
               />
             ))}
             <LabelList
               dataKey="annualReturn"
-              content={(props) => <BarLabel {...props} />}
+              content={(props) => <BarLabel {...props} color={barLabelColor} />}
             />
           </Bar>
 
@@ -347,12 +362,12 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
             {periodicData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.returnValue !== null && entry.returnValue >= 0 ? '#1f2937' : '#dc2626'}
+                fill={entry.returnValue !== null && entry.returnValue >= 0 ? barColor : '#dc2626'}
               />
             ))}
             <LabelList
               dataKey="returnValue"
-              content={(props) => <PeriodicBarLabel {...props} barCount={barCount} />}
+              content={(props) => <PeriodicBarLabel {...props} barCount={barCount} color={barLabelColor} />}
             />
           </Bar>
         </ComposedChart>
@@ -361,10 +376,10 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 mt-4">
+    <div className="bg-panel rounded-lg shadow-md p-4 mt-4">
       {/* Title row with toggle */}
       <div className="flex items-center gap-3 mb-2">
-        <h2 className="text-lg font-semibold text-gray-800">
+        <h2 className="text-lg font-semibold text-content">
           {titleMap[viewMode]}
         </h2>
         <div className="flex gap-1">
@@ -375,7 +390,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 viewMode === mode
                   ? 'bg-gray-800 text-white'
-                  : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                  : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
               }`}
             >
               {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -386,9 +401,9 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
 
       {/* Legend — full for annual, simple for monthly/quarterly */}
       {viewMode === 'annual' ? (
-        <div className="flex gap-4 text-xs text-gray-500 mb-2">
+        <div className="flex gap-4 text-xs text-muted mb-2">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-gray-800 rounded-sm"></div>
+            <div className="w-3 h-3 bg-gray-800 dark:bg-slate-400 rounded-sm"></div>
             <span>Annual Return (%)</span>
           </div>
           <div className="flex items-center gap-1">
@@ -396,14 +411,14 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
             <span>Max Drawdown (%)</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-green-800 font-semibold">12</span>
+            <span className="text-green-800 dark:text-green-400 font-semibold">12</span>
             <span>Number of ATHs</span>
           </div>
         </div>
       ) : (
-        <div className="flex gap-4 text-xs text-gray-500 mb-2">
+        <div className="flex gap-4 text-xs text-muted mb-2">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-gray-800 rounded-sm"></div>
+            <div className="w-3 h-3 bg-gray-800 dark:bg-slate-400 rounded-sm"></div>
             <span>Positive Return</span>
           </div>
           <div className="flex items-center gap-1">
