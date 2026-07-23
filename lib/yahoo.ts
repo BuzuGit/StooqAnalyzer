@@ -6,28 +6,30 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 /**
- * Map a Stooq-style ticker to the equivalent Yahoo Finance symbol.
+ * Build an ordered list of Yahoo Finance symbols to try for a ticker.
  *
- * Rules (deterministic, so the resolved symbol is predictable):
- *   - Already Yahoo-native (contains "-" or "="): used as-is (e.g. BTC-USD, USDPLN=X)
- *   - ".UK"  -> ".L"    (London Stock Exchange)
- *   - ".PL"  -> ".WA"   (Warsaw Stock Exchange)
- *   - ".V"   -> "-USD"  (Stooq crypto notation, e.g. BTC.V -> BTC-USD)
- *   - any other explicit ".XX" suffix: kept as-is (.DE, .L, .WA, .US, ...)
- *   - no suffix, 6 letters: treated as an FX pair -> "+=X" (e.g. USDPLN -> USDPLN=X)
- *   - no suffix, anything else: treated as a Warsaw-listed instrument -> "+.WA"
+ * A bare ticker is ambiguous — "AAPL" is a US stock (used as-is), while "KGH"
+ * is Warsaw-listed ("KGH.WA"). We can't tell from the string, so for bare
+ * tickers we try the symbol as-is first (US/global — the most common case),
+ * then FX ("=X" for a 6-letter pair), then Warsaw (".WA"). Stooq-style suffixes
+ * are converted deterministically.
  */
-export function toYahooSymbol(ticker: string): string {
+export function yahooCandidates(ticker: string): string[] {
   const t = ticker.trim().toUpperCase();
-  if (!t) return t;
+  if (!t) return [];
 
-  if (t.includes('-') || t.includes('=')) return t;
-  if (t.endsWith('.UK')) return t.slice(0, -3) + '.L';
-  if (t.endsWith('.PL')) return t.slice(0, -3) + '.WA';
-  if (t.endsWith('.V')) return t.slice(0, -2) + '-USD';
-  if (t.includes('.')) return t;
-  if (/^[A-Z]{6}$/.test(t)) return t + '=X';
-  return t + '.WA';
+  // Already Yahoo-native or an explicit exchange suffix — use exactly as given.
+  if (t.includes('-') || t.includes('=')) return [t];
+  if (t.endsWith('.UK')) return [t.slice(0, -3) + '.L']; // London
+  if (t.endsWith('.PL')) return [t.slice(0, -3) + '.WA']; // Warsaw
+  if (t.endsWith('.V')) return [t.slice(0, -2) + '-USD']; // Stooq crypto notation
+  if (t.includes('.')) return [t]; // e.g. KGH.WA, IWDA.L, XYZ.DE
+
+  // Bare ticker: try US/global first, then FX, then Warsaw.
+  const candidates = [t];
+  if (/^[A-Z]{6}$/.test(t)) candidates.push(t + '=X');
+  candidates.push(t + '.WA');
+  return candidates;
 }
 
 interface YahooChartResponse {
@@ -49,12 +51,11 @@ interface YahooChartResponse {
 }
 
 /**
- * Fetch full daily price history for a ticker from Yahoo Finance.
- * Returns an ascending-by-date array of OHLCV points.
- * Throws with a descriptive message when the symbol has no usable history.
+ * Fetch daily history for a single exact Yahoo symbol.
+ * Returns the OHLCV points, or null if the symbol has no usable daily history
+ * (so the caller can try the next candidate).
  */
-export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> {
-  const symbol = toYahooSymbol(ticker);
+async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null> {
   // Use explicit period1/period2 (epoch seconds) rather than range=max:
   // range=max downsamples long histories to monthly bars, which breaks daily
   // indicators like the 50/200-day SMA. period1=0 forces true daily granularity.
@@ -63,35 +64,16 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
     `${YAHOO_CHART_URL}${encodeURIComponent(symbol)}` +
     `?period1=0&period2=${now}&interval=1d`;
 
-  const response = await fetch(url, {
-    headers: { 'User-Agent': UA },
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Yahoo Finance request failed for ${ticker} (${symbol}): ${response.status} ${response.statusText}`
-    );
-  }
+  const response = await fetch(url, { headers: { 'User-Agent': UA } });
+  if (!response.ok) return null; // 404 etc. — symbol not found, try the next candidate
 
   const json: YahooChartResponse = await response.json();
-
-  if (json.chart?.error) {
-    throw new Error(
-      `Yahoo Finance has no symbol "${symbol}" (for ticker ${ticker}): ${
-        json.chart.error.description || json.chart.error.code
-      }`
-    );
-  }
+  if (json.chart?.error) return null;
 
   const result = json.chart?.result?.[0];
   const timestamps = result?.timestamp;
   const quote = result?.indicators?.quote?.[0];
-
-  if (!result || !timestamps || !quote || timestamps.length === 0) {
-    throw new Error(
-      `No data available on Yahoo Finance for ${ticker} (tried symbol "${symbol}")`
-    );
-  }
+  if (!result || !timestamps || !quote || timestamps.length === 0) return null;
 
   const data: StooqDataPoint[] = [];
   for (let i = 0; i < timestamps.length; i++) {
@@ -115,15 +97,28 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
     });
   }
 
-  if (data.length < 2) {
-    throw new Error(
-      `Yahoo Finance returned no usable history for ${ticker} (symbol "${symbol}"). ` +
-        `Indices such as WIG20 are not available on Yahoo — try a tracking ETF like ETFBW20ST.WA instead.`
-    );
-  }
+  // Need at least a couple of points to compute anything (also filters out
+  // index symbols like WIG20.WA that only return a single live value).
+  if (data.length < 2) return null;
 
   // Yahoo returns ascending order already, but guarantee it.
   data.sort((a, b) => a.date.localeCompare(b.date));
-
   return data;
+}
+
+/**
+ * Fetch full daily price history for a ticker from Yahoo Finance, trying each
+ * candidate symbol until one returns usable data.
+ * Throws with a descriptive message when none of them work.
+ */
+export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> {
+  const candidates = yahooCandidates(ticker);
+  for (const symbol of candidates) {
+    const data = await fetchYahooSymbol(symbol);
+    if (data) return data;
+  }
+  throw new Error(
+    `No data available on Yahoo Finance for ${ticker} (tried: ${candidates.join(', ')}). ` +
+      `Indices such as WIG20 are not on Yahoo — try a tracking ETF like ETFBW20ST.WA instead.`
+  );
 }
