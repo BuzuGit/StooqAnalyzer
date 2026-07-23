@@ -84,7 +84,7 @@ export default function CaptchaModal({ sessionToken, onSolved, onCancel }: Captc
             maxLength={8}
             autoFocus
             placeholder="Enter code"
-            className="w-full px-3 py-2 border border-line rounded-lg text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-line rounded-lg text-center tracking-widest bg-panel-2 text-content placeholder-subtle focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {errorMsg && <p className="mt-2 text-sm text-red-600">{errorMsg}</p>}
 

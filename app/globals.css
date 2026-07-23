@@ -4,6 +4,7 @@
 
 :root {
   /* Light theme */
+  color-scheme: light;
   --app: #f3f4f6;
   --panel: #ffffff;
   --panel-2: #f3f4f6;
@@ -24,6 +25,7 @@
 
 .dark {
   /* Dark theme — near-black, muted grays, amber accent (Bloomberg-like) */
+  color-scheme: dark;
   --app: #000000;
   --panel: #0e0e0e;
   --panel-2: #1a1a1a;

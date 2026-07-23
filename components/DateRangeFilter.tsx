@@ -103,7 +103,7 @@ export default function DateRangeFilter({
             max={localEnd}
             onChange={(e) => handleStartChange(e.target.value)}
             disabled={disabled}
-            className="px-3 py-1.5 border border-line rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-panel-2"
+            className="px-3 py-1.5 border border-line rounded-md text-sm bg-panel-2 text-content focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
           />
         </div>
 
@@ -116,7 +116,7 @@ export default function DateRangeFilter({
             max={maxDate}
             onChange={(e) => handleEndChange(e.target.value)}
             disabled={disabled}
-            className="px-3 py-1.5 border border-line rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-panel-2"
+            className="px-3 py-1.5 border border-line rounded-md text-sm bg-panel-2 text-content focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
           />
         </div>
 
