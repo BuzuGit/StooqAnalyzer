@@ -209,6 +209,27 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
     return computeEvenTicks(dates, tickCount);
   }, [data, isShortRange, isLongRange, tickCount]);
 
+  // Period length and CAGR of the currently displayed (filtered) primary series,
+  // shown next to the single-ticker title. CAGR matches lib/statistics.
+  const periodCagr = useMemo(() => {
+    if (!isSingleTicker || primaryData.length < 2) return null;
+    const start = new Date(primaryData[0].date).getTime();
+    const end = new Date(primaryData[primaryData.length - 1].date).getTime();
+    const startPrice = primaryData[0].close;
+    const endPrice = primaryData[primaryData.length - 1].close;
+    if (!(startPrice > 0) || end <= start) return null;
+
+    const years = (end - start) / (365.25 * 24 * 60 * 60 * 1000);
+    const cagr = years > 0 ? (Math.pow(endPrice / startPrice, 1 / years) - 1) * 100 : 0;
+
+    const totalMonths = Math.round((end - start) / 86400000 / 30.4375);
+    const y = Math.floor(totalMonths / 12);
+    const mo = totalMonths % 12;
+    const period = y > 0 ? `${y}y ${mo}m` : `${mo}m`;
+    const cagrStr = `${cagr >= 0 ? '+' : ''}${cagr.toFixed(1)}%`;
+    return { period, cagr: cagrStr };
+  }, [isSingleTicker, primaryData]);
+
   if (data.length === 0) {
     return (
       <div className="bg-panel rounded-lg shadow-md p-8 flex items-center justify-center h-96">
@@ -311,6 +332,11 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold text-content">
             {isSingleTicker ? `${primaryTicker} Price & Drawdown` : 'Normalized Comparison (Base = 100)'}
+            {isSingleTicker && periodCagr && (
+              <span className="ml-2 text-sm font-normal text-muted">
+                (Period: {periodCagr.period} | CAGR: {periodCagr.cagr})
+              </span>
+            )}
           </h2>
           {isSingleTicker && (
             <div className="flex gap-1 ml-2">
