@@ -76,7 +76,7 @@ export default function TickerInput({
               disabled={isLoading}
               className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
                 source === s
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-gray-700 text-white shadow-sm'
                   : 'text-muted hover:text-content'
               }`}
             >
@@ -105,7 +105,7 @@ export default function TickerInput({
         <button
           type="submit"
           disabled={isLoading || inputValue.trim().length === 0}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+          className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
         >
           {isLoading ? (
             <span className="flex items-center gap-2">

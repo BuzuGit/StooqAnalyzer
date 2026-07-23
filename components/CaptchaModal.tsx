@@ -99,7 +99,7 @@ export default function CaptchaModal({ sessionToken, onSolved, onCancel }: Captc
             <button
               type="submit"
               disabled={submitting || code.trim().length === 0}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+              className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
             >
               {submitting ? 'Checking…' : 'Submit'}
             </button>

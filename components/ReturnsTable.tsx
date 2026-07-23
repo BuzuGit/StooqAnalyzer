@@ -99,16 +99,16 @@ export default function ReturnsTable({ data, ticker }: ReturnsTableProps) {
       <div className="overflow-x-auto overflow-y-visible">
         <table className="w-full text-xs border-collapse">
           <thead>
-            <tr className="bg-blue-600 text-white">
+            <tr className="bg-gray-700 text-white">
               <th className="px-2 py-2 text-left font-medium">Year</th>
               {MONTHS.map(month => (
                 <th key={month} className="px-2 py-2 text-center font-medium">
                   {month}
                 </th>
               ))}
-              <th className="px-2 py-2 text-center font-medium bg-blue-700">Annual</th>
-              <th className="px-2 py-2 text-center font-medium bg-blue-700">STD</th>
-              <th className="px-2 py-2 text-center font-medium bg-blue-700">Max DD</th>
+              <th className="px-2 py-2 text-center font-medium bg-gray-800">Annual</th>
+              <th className="px-2 py-2 text-center font-medium bg-gray-800">STD</th>
+              <th className="px-2 py-2 text-center font-medium bg-gray-800">Max DD</th>
             </tr>
           </thead>
           <tbody>

@@ -147,7 +147,7 @@ export default function DateRangeFilter({
               key={preset.label}
               onClick={preset.action}
               disabled={disabled}
-              className="px-2 py-1 text-xs bg-panel-2 hover:bg-blue-100 hover:text-blue-700 rounded transition-colors disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-panel-2 hover:bg-panel-3 hover:text-content rounded transition-colors disabled:opacity-50"
             >
               {preset.label}
             </button>

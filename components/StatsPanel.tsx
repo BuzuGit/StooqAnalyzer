@@ -120,7 +120,7 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
       {statistics.map((stats, index) => (
         <div key={stats.ticker} className={index > 0 ? 'border-t-4 border-line' : ''}>
           {/* Ticker Header */}
-          <div className="bg-blue-600 text-white py-2 px-3">
+          <div className="bg-gray-700 text-white py-2 px-3">
             <h3 className="font-bold text-lg">{stats.ticker}</h3>
           </div>
 
