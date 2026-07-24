@@ -26,12 +26,15 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
   yahoo: [
     { label: 'KGH.WA', value: 'KGH.WA' },
     { label: 'PKO.WA', value: 'PKO.WA' },
-    { label: 'ETFBW20ST.WA', value: 'ETFBW20ST.WA' },
+    { label: 'ETFBW20TR.WA', value: 'ETFBW20TR.WA' },
     { label: 'USDPLN=X', value: 'USDPLN=X' },
     { label: 'BTC-USD', value: 'BTC-USD' },
     { label: 'IWDA.L', value: 'IWDA.L' },
     { label: 'CSPX.L', value: 'CSPX.L' },
     { label: 'AAPL', value: 'AAPL' },
+    { label: 'GLD', value: 'GLD' },
+    { label: 'QQQ', value: 'QQQ' },
+    { label: 'ES3.SI', value: 'ES3.SI' },
   ],
 };
 

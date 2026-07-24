@@ -5,6 +5,8 @@ export interface StooqDataPoint {
   low: number;
   close: number;
   volume: number;
+  /** Adjusted close (dividends/splits). Available from Yahoo; absent for Stooq. */
+  adjClose?: number;
 }
 
 export interface TickerData {

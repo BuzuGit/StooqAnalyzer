@@ -160,6 +160,38 @@ export default function Home() {
     setDateRange({ start: startDate, end: endDate });
   }, []);
 
+  // Export the whole sourced (unfiltered) data to an Excel workbook.
+  const [isDownloading, setIsDownloading] = useState(false);
+  const handleDownloadExcel = useCallback(async () => {
+    if (rawTickersData.length === 0) return;
+    setIsDownloading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers: rawTickersData }),
+      });
+      if (!response.ok) {
+        const msg = await response.json().catch(() => ({}));
+        throw new Error(msg.error || 'Failed to generate Excel file');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${rawTickersData.map((t) => t.ticker).join('_')}_export.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate Excel file');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [rawTickersData]);
+
   const tickers = filteredTickersData.map((td) => td.ticker);
   const hasData = rawTickersData.length > 0;
 
@@ -210,6 +242,8 @@ export default function Home() {
             endDate={dateRange.end}
             onRangeChange={handleDateRangeChange}
             disabled={isLoading}
+            onDownloadExcel={handleDownloadExcel}
+            isDownloading={isDownloading}
           />
         )}
 

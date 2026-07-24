@@ -9,6 +9,8 @@ interface DateRangeFilterProps {
   endDate: string;
   onRangeChange: (startDate: string, endDate: string) => void;
   disabled?: boolean;
+  onDownloadExcel?: () => void;
+  isDownloading?: boolean;
 }
 
 export default function DateRangeFilter({
@@ -18,6 +20,8 @@ export default function DateRangeFilter({
   endDate,
   onRangeChange,
   disabled = false,
+  onDownloadExcel,
+  isDownloading = false,
 }: DateRangeFilterProps) {
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
@@ -128,7 +132,7 @@ export default function DateRangeFilter({
           Reset
         </button>
 
-        <div className="h-6 w-px bg-gray-300"></div>
+        <div className="h-6 w-px bg-line"></div>
 
         <div className="flex flex-wrap gap-2">
           <span className="text-sm text-muted self-center">Quick:</span>
@@ -152,6 +156,32 @@ export default function DateRangeFilter({
               {preset.label}
             </button>
           ))}
+
+          {onDownloadExcel && (
+            <button
+              onClick={onDownloadExcel}
+              disabled={disabled || isDownloading}
+              title="Download all sourced data as an Excel workbook (daily, monthly, yearly)"
+              className="ml-1 inline-flex items-center gap-1 px-3 py-1 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDownloading ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Exporting…
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Excel
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

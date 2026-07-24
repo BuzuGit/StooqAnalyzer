@@ -44,6 +44,7 @@ interface YahooChartResponse {
           close?: (number | null)[];
           volume?: (number | null)[];
         }>;
+        adjclose?: Array<{ adjclose?: (number | null)[] }>;
       };
     }>;
     error?: { code?: string; description?: string } | null;
@@ -73,6 +74,7 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
   const result = json.chart?.result?.[0];
   const timestamps = result?.timestamp;
   const quote = result?.indicators?.quote?.[0];
+  const adjcloseArr = result?.indicators?.adjclose?.[0]?.adjclose;
   if (!result || !timestamps || !quote || timestamps.length === 0) return null;
 
   const data: StooqDataPoint[] = [];
@@ -84,6 +86,7 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
     const high = quote.high?.[i];
     const low = quote.low?.[i];
     const volume = quote.volume?.[i];
+    const adj = adjcloseArr?.[i];
 
     const date = new Date(timestamps[i] * 1000).toISOString().slice(0, 10);
 
@@ -94,6 +97,7 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
       low: low != null && !isNaN(low) ? low : close,
       close,
       volume: volume != null && !isNaN(volume) ? volume : 0,
+      adjClose: adj != null && !isNaN(adj) ? adj : undefined,
     });
   }
 
@@ -119,6 +123,6 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
   }
   throw new Error(
     `No data available on Yahoo Finance for ${ticker} (tried: ${candidates.join(', ')}). ` +
-      `Indices such as WIG20 are not on Yahoo — try a tracking ETF like ETFBW20ST.WA instead.`
+      `Indices such as WIG20 are not on Yahoo — try a tracking ETF like ETFBW20TR.WA instead.`
   );
 }
