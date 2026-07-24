@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import TickerInput, { DataSource } from '@/components/TickerInput';
 import CaptchaModal from '@/components/CaptchaModal';
 import ThemeToggle from '@/components/ThemeToggle';
+import { PriceBasis, tickersWithBasis, hasAdjClose } from '@/lib/priceBasis';
 import PriceChart from '@/components/PriceChart';
 import StatsPanel from '@/components/StatsPanel';
 import DateRangeFilter from '@/components/DateRangeFilter';
@@ -41,23 +42,34 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [focusedTickerIndex, setFocusedTickerIndex] = useState(0);
   const [source, setSource] = useState<DataSource>('yahoo');
+  const [priceBasis, setPriceBasis] = useState<PriceBasis>('close');
 
   // Stooq CAPTCHA flow state
   const [stooqSession, setStooqSession] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [pendingTickers, setPendingTickers] = useState<string[] | null>(null);
 
+  // Whether the loaded data supports adjusted close (Yahoo yes, Stooq no).
+  const adjCloseAvailable = useMemo(() => hasAdjClose(rawTickersData), [rawTickersData]);
+
+  // Re-express the raw data on the chosen price basis (close vs adjusted close)
+  // before any filtering/analysis, so charts and statistics stay consistent.
+  const basisTickersData = useMemo<TickerData[]>(
+    () => tickersWithBasis(rawTickersData, priceBasis),
+    [rawTickersData, priceBasis]
+  );
+
   // Filter data based on selected date range
   const filteredTickersData = useMemo<TickerData[]>(() => {
-    if (rawTickersData.length === 0 || !dateRange.start || !dateRange.end) {
-      return rawTickersData;
+    if (basisTickersData.length === 0 || !dateRange.start || !dateRange.end) {
+      return basisTickersData;
     }
 
-    return rawTickersData.map((tickerData) => ({
+    return basisTickersData.map((tickerData) => ({
       ticker: tickerData.ticker,
       data: filterDataByDateRange(tickerData.data, dateRange.start, dateRange.end),
     }));
-  }, [rawTickersData, dateRange]);
+  }, [basisTickersData, dateRange]);
 
   // Calculate statistics from filtered data
   const statistics = useMemo<Statistics[]>(() => {
@@ -199,7 +211,7 @@ export default function Home() {
   const focusedIdx = Math.min(focusedTickerIndex, Math.max(tickers.length - 1, 0));
   const focusedTicker = tickers[focusedIdx] || '';
   const focusedData = filteredTickersData[focusedIdx]?.data || [];
-  const rawFocusedData = rawTickersData[focusedIdx]?.data || [];
+  const rawFocusedData = basisTickersData[focusedIdx]?.data || [];
 
   return (
     <main className="min-h-screen bg-app">
@@ -247,6 +259,33 @@ export default function Home() {
           />
         )}
 
+        {/* Price basis toggle — only when the data has adjusted close (Yahoo) */}
+        {hasData && adjCloseAvailable && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted">Price basis:</span>
+            <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
+              {(['close', 'adjClose'] as PriceBasis[]).map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setPriceBasis(b)}
+                  disabled={isLoading}
+                  className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
+                    priceBasis === b
+                      ? 'bg-gray-700 text-white shadow-sm'
+                      : 'text-muted hover:text-content'
+                  }`}
+                >
+                  {b === 'close' ? 'Close' : 'Adj Close'}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted">
+              Adjusted close reflects dividends &amp; splits — recommended for returns and drawdowns.
+            </span>
+          </div>
+        )}
+
         {/* Error Message */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -278,7 +317,7 @@ export default function Home() {
               data={chartData}
               tickers={tickers}
               tickersData={filteredTickersData}
-              rawTickersData={rawTickersData}
+              rawTickersData={basisTickersData}
             />
           </div>
 
