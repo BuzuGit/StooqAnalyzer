@@ -1,9 +1,32 @@
 import { StooqDataPoint } from './types';
 
 const YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+const YAHOO_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+interface YahooSearchResponse {
+  quotes?: Array<{ symbol?: string }>;
+}
+
+/** ISIN: 2-letter country code + 9 alphanumerics + 1 check digit. */
+export function isIsin(value: string): boolean {
+  return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
+}
+
+/**
+ * Resolve an ISIN to a Yahoo symbol via Yahoo's search endpoint. Funds/ETFs
+ * resolve to their "0P..." symbol; equities to their listing symbol. Yahoo's
+ * chart API only accepts symbols, not ISINs.
+ */
+async function resolveIsin(isin: string): Promise<string | null> {
+  const url = `${YAHOO_SEARCH_URL}?q=${encodeURIComponent(isin)}&quotesCount=1&newsCount=0`;
+  const res = await fetch(url, { headers: { 'User-Agent': UA } });
+  if (!res.ok) return null;
+  const json: YahooSearchResponse = await res.json();
+  return json.quotes?.find((q) => q.symbol)?.symbol ?? null;
+}
 
 /**
  * Build an ordered list of Yahoo Finance symbols to try for a ticker.
@@ -116,6 +139,18 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
  * Throws with a descriptive message when none of them work.
  */
 export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> {
+  // An ISIN must first be resolved to a Yahoo symbol (funds/ETFs -> "0P...").
+  if (isIsin(ticker.trim().toUpperCase())) {
+    const isin = ticker.trim().toUpperCase();
+    const symbol = await resolveIsin(isin);
+    if (!symbol) {
+      throw new Error(`Could not find ISIN ${isin} on Yahoo Finance.`);
+    }
+    const data = await fetchYahooSymbol(symbol);
+    if (data) return data;
+    throw new Error(`No usable history on Yahoo Finance for ISIN ${isin} (symbol ${symbol}).`);
+  }
+
   const candidates = yahooCandidates(ticker);
   for (const symbol of candidates) {
     const data = await fetchYahooSymbol(symbol);

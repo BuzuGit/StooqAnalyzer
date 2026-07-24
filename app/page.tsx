@@ -391,7 +391,7 @@ export default function Home() {
           </p>
           <p className="mt-1">
             {source === 'yahoo'
-              ? 'Yahoo examples: KGH.WA (Polish stocks), USDPLN=X (FX), BTC-USD (crypto), IWDA.L (ETFs)'
+              ? 'Yahoo examples: KGH.WA (stocks), USDPLN=X (FX), BTC-USD (crypto), IWDA.L (ETFs), or an ISIN (e.g. LU1662497327)'
               : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>
