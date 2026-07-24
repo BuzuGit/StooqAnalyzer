@@ -392,6 +392,8 @@ export default function Home() {
           <p className="mt-1">
             {source === 'yahoo'
               ? 'Yahoo examples: KGH.WA (stocks), USDPLN=X (FX), BTC-USD (crypto), IWDA.L (ETFs), or an ISIN (e.g. LU1662497327)'
+              : source === 'twelvedata'
+              ? 'Twelve Data examples: AAPL, MSFT, QQQ (US), BTC-USD (crypto), USDPLN=X (FX). Needs a free API key.'
               : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>

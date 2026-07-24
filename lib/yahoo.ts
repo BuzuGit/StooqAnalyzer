@@ -1,13 +1,81 @@
 import { StooqDataPoint } from './types';
 
-const YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
-const YAHOO_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
+const YAHOO_CHART_PATH = '/v8/finance/chart/';
+const YAHOO_SEARCH_PATH = '/v1/finance/search';
+// Try both API hosts — when Yahoo has issues it is often only one of them.
+const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 interface YahooSearchResponse {
   quotes?: Array<{ symbol?: string }>;
+}
+
+/** Cached cookie + crumb; Yahoo sometimes starts requiring these on the data APIs. */
+let crumbCache: { cookie: string; crumb: string } | null = null;
+
+function setCookieHeader(res: Response): string {
+  const anyHeaders = res.headers as unknown as { getSetCookie?: () => string[] };
+  const list =
+    typeof anyHeaders.getSetCookie === 'function'
+      ? anyHeaders.getSetCookie()
+      : res.headers.get('set-cookie')
+      ? [res.headers.get('set-cookie') as string]
+      : [];
+  return list.map((c) => c.split(';')[0]).join('; ');
+}
+
+/** Best-effort acquisition of Yahoo's anti-abuse cookie + crumb (yfinance-style). */
+async function fetchCrumb(): Promise<{ cookie: string; crumb: string } | null> {
+  if (crumbCache) return crumbCache;
+  try {
+    const r1 = await fetch('https://fc.yahoo.com/', { headers: { 'User-Agent': UA } });
+    const cookie = setCookieHeader(r1);
+    if (!cookie) return null;
+    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+      headers: { 'User-Agent': UA, Cookie: cookie },
+    });
+    if (!r2.ok) return null;
+    const crumb = (await r2.text()).trim();
+    if (!crumb || crumb.length > 40 || crumb.includes('<')) return null;
+    crumbCache = { cookie, crumb };
+    return crumbCache;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch a Yahoo API path, resilient to the ways Yahoo breaks: falls back from
+ * query1 to query2, and if a request is rejected (401/403) it obtains a
+ * cookie+crumb and retries. Returns the Response (even 404, so the caller can
+ * treat it as "not found"), or null if every host failed at the network level.
+ */
+async function yahooApiFetch(pathWithQuery: string): Promise<Response | null> {
+  let lastRes: Response | null = null;
+  for (const host of YAHOO_HOSTS) {
+    const base = `https://${host}${pathWithQuery}`;
+    try {
+      let res = await fetch(base, {
+        headers: { 'User-Agent': UA, ...(crumbCache ? { Cookie: crumbCache.cookie } : {}) },
+      });
+      if (res.status === 401 || res.status === 403) {
+        const cr = await fetchCrumb();
+        if (cr) {
+          const sep = pathWithQuery.includes('?') ? '&' : '?';
+          res = await fetch(`${base}${sep}crumb=${encodeURIComponent(cr.crumb)}`, {
+            headers: { 'User-Agent': UA, Cookie: cr.cookie },
+          });
+        }
+      }
+      if (res.ok || res.status === 404) return res;
+      lastRes = res; // 429/5xx — try the other host before giving up
+    } catch {
+      // network error — try the next host
+    }
+  }
+  return lastRes;
 }
 
 /** ISIN: 2-letter country code + 9 alphanumerics + 1 check digit. */
@@ -21,9 +89,10 @@ export function isIsin(value: string): boolean {
  * chart API only accepts symbols, not ISINs.
  */
 async function resolveIsin(isin: string): Promise<string | null> {
-  const url = `${YAHOO_SEARCH_URL}?q=${encodeURIComponent(isin)}&quotesCount=1&newsCount=0`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!res.ok) return null;
+  const res = await yahooApiFetch(
+    `${YAHOO_SEARCH_PATH}?q=${encodeURIComponent(isin)}&quotesCount=1&newsCount=0`
+  );
+  if (!res || !res.ok) return null;
   const json: YahooSearchResponse = await res.json();
   return json.quotes?.find((q) => q.symbol)?.symbol ?? null;
 }
@@ -84,12 +153,12 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
   // range=max downsamples long histories to monthly bars, which breaks daily
   // indicators like the 50/200-day SMA. period1=0 forces true daily granularity.
   const now = Math.floor(Date.now() / 1000);
-  const url =
-    `${YAHOO_CHART_URL}${encodeURIComponent(symbol)}` +
+  const path =
+    `${YAHOO_CHART_PATH}${encodeURIComponent(symbol)}` +
     `?period1=0&period2=${now}&interval=1d`;
 
-  const response = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!response.ok) return null; // 404 etc. — symbol not found, try the next candidate
+  const response = await yahooApiFetch(path);
+  if (!response || !response.ok) return null; // 404/unavailable — try the next candidate
 
   const json: YahooChartResponse = await response.json();
   if (json.chart?.error) return null;

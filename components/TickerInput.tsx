@@ -2,7 +2,13 @@
 
 import { useState, FormEvent } from 'react';
 
-export type DataSource = 'stooq' | 'yahoo';
+export type DataSource = 'stooq' | 'yahoo' | 'twelvedata';
+
+const SOURCE_LABELS: Record<DataSource, string> = {
+  stooq: 'Stooq',
+  yahoo: 'Yahoo',
+  twelvedata: 'Twelve Data',
+};
 
 interface TickerInputProps {
   onSubmit: (tickers: string[], source: DataSource) => void;
@@ -36,6 +42,14 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'QQQ', value: 'QQQ' },
     { label: 'ES3.SI', value: 'ES3.SI' },
   ],
+  twelvedata: [
+    { label: 'AAPL', value: 'AAPL' },
+    { label: 'MSFT', value: 'MSFT' },
+    { label: 'QQQ', value: 'QQQ' },
+    { label: 'GLD', value: 'GLD' },
+    { label: 'BTC-USD', value: 'BTC-USD' },
+    { label: 'USDPLN=X', value: 'USDPLN=X' },
+  ],
 };
 
 export default function TickerInput({
@@ -62,7 +76,9 @@ export default function TickerInput({
 
   const placeholder =
     source === 'yahoo'
-      ? 'Enter Yahoo symbols (e.g., KGH.WA, USDPLN=X, BTC-USD)'
+      ? 'Enter Yahoo symbols or ISINs (e.g., KGH.WA, USDPLN=X, LU1662497327)'
+      : source === 'twelvedata'
+      ? 'Enter symbols (e.g., AAPL, BTC-USD, USDPLN=X)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
@@ -71,7 +87,7 @@ export default function TickerInput({
       <div className="mb-3 flex items-center gap-3">
         <span className="text-sm font-medium text-content">Data source:</span>
         <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-          {(['stooq', 'yahoo'] as DataSource[]).map((s) => (
+          {(['yahoo', 'stooq', 'twelvedata'] as DataSource[]).map((s) => (
             <button
               key={s}
               type="button"
@@ -83,13 +99,18 @@ export default function TickerInput({
                   : 'text-muted hover:text-content'
               }`}
             >
-              {s === 'stooq' ? 'Stooq' : 'Yahoo Finance'}
+              {SOURCE_LABELS[s]}
             </button>
           ))}
         </div>
         {source === 'stooq' && (
           <span className="text-xs text-amber-600">
             ⚠ Stooq requires a one-time CAPTCHA per session — you&apos;ll be prompted to solve it.
+          </span>
+        )}
+        {source === 'twelvedata' && (
+          <span className="text-xs text-amber-600">
+            ⚠ Needs a free API key in .env.local (TWELVEDATA_API_KEY).
           </span>
         )}
       </div>

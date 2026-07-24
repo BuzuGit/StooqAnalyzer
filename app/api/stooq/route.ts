@@ -6,14 +6,17 @@ import {
   StooqCaptchaRequiredError,
 } from '@/lib/stooq';
 import { fetchYahooData } from '@/lib/yahoo';
+import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
-type DataSource = 'stooq' | 'yahoo';
+type DataSource = 'stooq' | 'yahoo' | 'twelvedata';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const tickersParam = searchParams.get('tickers');
-  const source: DataSource = searchParams.get('source') === 'stooq' ? 'stooq' : 'yahoo';
+  const rawSource = searchParams.get('source');
+  const source: DataSource =
+    rawSource === 'stooq' ? 'stooq' : rawSource === 'twelvedata' ? 'twelvedata' : 'yahoo';
   const sessionToken = searchParams.get('session') || undefined;
 
   if (!tickersParam) {
@@ -45,17 +48,18 @@ export async function GET(request: NextRequest) {
     // Yahoo requests are independent — fetch them in parallel. Stooq must stay
     // sequential: all tickers share one CAPTCHA-unlocked session and Stooq rate
     // limits per IP.
-    const datasets: StooqDataPoint[][] =
-      source === 'yahoo'
-        ? await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)))
-        : await (async () => {
-            const token = await ensureStooqSession(sessionToken);
-            const out: StooqDataPoint[][] = [];
-            for (const ticker of tickers) {
-              out.push(await fetchStooqData(ticker, token, apiKey));
-            }
-            return out;
-          })();
+    let datasets: StooqDataPoint[][];
+    if (source === 'yahoo') {
+      datasets = await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)));
+    } else if (source === 'twelvedata') {
+      datasets = await Promise.all(tickers.map((ticker) => fetchTwelveData(ticker)));
+    } else {
+      const token = await ensureStooqSession(sessionToken);
+      datasets = [];
+      for (const ticker of tickers) {
+        datasets.push(await fetchStooqData(ticker, token, apiKey));
+      }
+    }
 
     const results: TickerData[] = [];
     for (let i = 0; i < tickers.length; i++) {
@@ -92,6 +96,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: error.message },
         { status: 503 }
+      );
+    }
+
+    if (error instanceof TwelveDataConfigError) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: error.message },
+        { status: 400 }
       );
     }
 
