@@ -10,6 +10,15 @@ const SOURCE_LABELS: Record<DataSource, string> = {
   twelvedata: 'Twelve Data',
 };
 
+const SOURCE_INFO: Record<DataSource, string> = {
+  yahoo:
+    'Broadest coverage: global stocks, ETFs, FX, crypto, and European funds by ISIN. Includes adjusted close (Close/Adj-Close toggle). Unofficial API — occasionally flaky. Indices (e.g. WIG20) have no history — use a tracking ETF.',
+  stooq:
+    'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP (can be temporarily denied). No adjusted close.',
+  twelvedata:
+    'Stable official API (needs a free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — no adjusted close. ~20y history, rate-limited.',
+};
+
 interface TickerInputProps {
   onSubmit: (tickers: string[], source: DataSource) => void;
   isLoading: boolean;
@@ -103,17 +112,10 @@ export default function TickerInput({
             </button>
           ))}
         </div>
-        {source === 'stooq' && (
-          <span className="text-xs text-amber-600">
-            ⚠ Stooq requires a one-time CAPTCHA per session — you&apos;ll be prompted to solve it.
-          </span>
-        )}
-        {source === 'twelvedata' && (
-          <span className="text-xs text-amber-600">
-            ⚠ Needs a free API key in .env.local (TWELVEDATA_API_KEY).
-          </span>
-        )}
       </div>
+
+      {/* Per-source coverage & limitations */}
+      <p className="mb-3 text-xs text-muted">{SOURCE_INFO[source]}</p>
 
       <form onSubmit={handleSubmit} className="flex gap-3">
         <div className="flex-1">

@@ -3,6 +3,8 @@ import { StooqDataPoint } from './types';
 import {
   createSession,
   getSession,
+  hasSharedSessionStore,
+  saveSession,
   serializeCookies,
   storeSetCookies,
   StooqSession,
@@ -153,12 +155,13 @@ async function fetchBinaryWithPoW(
  * CAPTCHA only unlocks downloads when the session already looks like a browser.
  */
 async function ensurePowSession(token?: string): Promise<StooqSession> {
-  const existing = token ? getSession(token) : undefined;
+  const existing = token ? await getSession(token) : undefined;
   if (existing) return existing;
 
-  const session = createSession();
+  const session = await createSession();
   await fetchTextWithPoW(`${STOOQ_ORIGIN}/`, session);
   await fetchTextWithPoW(`${STOOQ_ORIGIN}/q/d/?s=wig20`, session);
+  await saveSession(session); // persist the warmed-up cookie set
   return session;
 }
 
@@ -170,11 +173,13 @@ async function ensurePowSession(token?: string): Promise<StooqSession> {
 export async function getStooqCaptchaImage(
   token: string
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) {
     throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
-  return fetchBinaryWithPoW(`${STOOQ_CAPTCHA_IMG_URL}?${Date.now()}`, session);
+  const image = await fetchBinaryWithPoW(`${STOOQ_CAPTCHA_IMG_URL}?${Date.now()}`, session);
+  await saveSession(session); // the image fetch may have solved a PoW and set cookies
+  return image;
 }
 
 /**
@@ -182,7 +187,7 @@ export async function getStooqCaptchaImage(
  * unlocks the session for downloads.
  */
 export async function submitStooqCaptcha(token: string, code: string): Promise<boolean> {
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) {
     throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
@@ -190,11 +195,9 @@ export async function submitStooqCaptcha(token: string, code: string): Promise<b
   const body = (
     await fetchTextWithPoW(`${STOOQ_CAPTCHA_CHECK_URL}?t=${encodeURIComponent(answer)}`, session)
   ).trim();
-  if (body === '1') {
-    session.unlocked = true;
-    return true;
-  }
-  return false;
+  session.unlocked = body === '1';
+  await saveSession(session); // persist unlocked flag + any cookies for the download request
+  return session.unlocked;
 }
 
 /**
@@ -204,6 +207,16 @@ export async function submitStooqCaptcha(token: string, code: string): Promise<b
  * fetchStooqData). Often the warm-up cookies alone are enough to download.
  */
 export async function ensureStooqSession(token?: string): Promise<string> {
+  // On Vercel the CAPTCHA flow spans several isolated serverless requests, so it
+  // needs a shared session store (Redis). Without one the session is lost between
+  // requests and the download can never unlock — fail loudly with instructions.
+  if (process.env.VERCEL && !hasSharedSessionStore()) {
+    throw new StooqBlockedError(
+      'Stooq needs a Redis store on Vercel so its CAPTCHA session survives across ' +
+        'serverless requests. Add Upstash Redis (or Vercel KV) to the project and redeploy. ' +
+        'Meanwhile, use Yahoo or Twelve Data.'
+    );
+  }
   const session = await ensurePowSession(token);
   return session.token;
 }
@@ -222,7 +235,7 @@ export async function fetchStooqData(
   token: string,
   apiKey?: string
 ): Promise<StooqDataPoint[]> {
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) {
     // Should not happen (the route ensures the session first), but if it expired
     // mid-request, ask the user to retry rather than hand back an un-warmed session.
@@ -231,6 +244,7 @@ export async function fetchStooqData(
 
   // Download, transparently solving a proof-of-work challenge if Stooq serves one.
   const text = await fetchTextWithPoW(downloadUrl(ticker, apiKey), session);
+  await saveSession(session); // persist any cookies picked up during the download
 
   // Stooq caps how many downloads an IP may make per day.
   if (text.includes('Przekroczony dzienny limit')) {

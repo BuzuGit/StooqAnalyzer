@@ -230,6 +230,11 @@ export default function Home() {
           <div>
             <h1 className="text-2xl font-bold text-content">Stooq Analyzer</h1>
             <p className="text-sm text-muted">Stock and asset analytics with comprehensive statistics</p>
+            <p className="text-xs text-muted mt-1">
+              Compare assets by entering several tickers separated by commas — e.g.{' '}
+              <span className="font-mono text-content">AAPL, MSFT</span>. They&apos;re normalized to a common
+              start (=100) on one chart; pick a &ldquo;Focus asset&rdquo; for the detailed stats below.
+            </p>
           </div>
           <ThemeToggle />
         </div>

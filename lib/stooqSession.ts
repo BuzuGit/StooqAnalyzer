@@ -1,13 +1,14 @@
 import { randomBytes } from 'crypto';
+import { Redis } from '@upstash/redis';
 
 /**
  * A Stooq browsing session: a cookie jar plus whether the human CAPTCHA has been
- * solved. Kept server-side because the CAPTCHA image, the answer submission, and
- * the eventual download all share the same session cookies (PHPSESSID / auth).
+ * solved. It must persist across several requests (create → CAPTCHA image →
+ * submit answer → download), and on Vercel those requests hit different, isolated
+ * serverless functions — so in-memory state does NOT work there.
  *
- * This is an in-memory store — appropriate for a single-user local tool. Sessions
- * expire after TTL and are pruned lazily. A dev-server hot reload clears them,
- * which just means the user solves the CAPTCHA again.
+ * When Upstash/Vercel-KV Redis env vars are present we use Redis (required on
+ * Vercel). Otherwise we fall back to an in-memory Map for local `npm run dev`.
  */
 export interface StooqSession {
   token: string;
@@ -16,48 +17,63 @@ export interface StooqSession {
   createdAt: number;
 }
 
-// Pin the store to globalThis so it is shared across route modules and survives
-// Next.js dev hot-reloads (module-level state alone is not reliably shared
-// between separate route handlers in the same process).
+const TTL_SECONDS = 30 * 60; // 30 minutes
+
+// Support both Vercel KV (KV_REST_API_*) and direct Upstash (UPSTASH_REDIS_REST_*).
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
+
+/** True when a shared session store is configured (i.e. Stooq can work on Vercel). */
+export function hasSharedSessionStore(): boolean {
+  return redis !== null;
+}
+
+// In-memory fallback for local dev only.
 const globalForSessions = globalThis as unknown as {
   __stooqSessions?: Map<string, StooqSession>;
 };
-const SESSIONS: Map<string, StooqSession> =
+const MEM: Map<string, StooqSession> =
   globalForSessions.__stooqSessions ?? new Map<string, StooqSession>();
-globalForSessions.__stooqSessions = SESSIONS;
+globalForSessions.__stooqSessions = MEM;
 
-const TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_SESSIONS = 100; // safety cap so the store can't grow unbounded
+const redisKey = (token: string) => `stooq:session:${token}`;
 
-function prune(): void {
-  const now = Date.now();
-  for (const [token, session] of SESSIONS) {
-    if (now - session.createdAt > TTL_MS) SESSIONS.delete(token);
-  }
-  // Map preserves insertion order, so the first entries are the oldest.
-  while (SESSIONS.size >= MAX_SESSIONS) {
-    const oldest = SESSIONS.keys().next().value;
-    if (oldest === undefined) break;
-    SESSIONS.delete(oldest);
-  }
-}
-
-export function createSession(): StooqSession {
-  prune();
-  const token = randomBytes(16).toString('hex');
-  const session: StooqSession = {
-    token,
+export function newSession(): StooqSession {
+  return {
+    token: randomBytes(16).toString('hex'),
     cookies: {},
     unlocked: false,
     createdAt: Date.now(),
   };
-  SESSIONS.set(token, session);
+}
+
+/** Persist a session (upsert) with a sliding TTL. Call after mutating cookies/unlocked. */
+export async function saveSession(session: StooqSession): Promise<void> {
+  if (redis) {
+    await redis.set(redisKey(session.token), session, { ex: TTL_SECONDS });
+  } else {
+    MEM.set(session.token, session);
+  }
+}
+
+export async function createSession(): Promise<StooqSession> {
+  const session = newSession();
+  await saveSession(session);
   return session;
 }
 
-export function getSession(token: string): StooqSession | undefined {
-  prune();
-  return SESSIONS.get(token);
+export async function getSession(token: string): Promise<StooqSession | undefined> {
+  if (redis) {
+    const data = await redis.get<StooqSession>(redisKey(token));
+    return data ?? undefined;
+  }
+  const session = MEM.get(token);
+  if (session && Date.now() - session.createdAt > TTL_SECONDS * 1000) {
+    MEM.delete(token);
+    return undefined;
+  }
+  return session;
 }
 
 export function serializeCookies(session: StooqSession): string {
@@ -67,7 +83,6 @@ export function serializeCookies(session: StooqSession): string {
 }
 
 function extractSetCookies(response: Response): string[] {
-  // Node 18+ / undici exposes getSetCookie(); fall back to the single header.
   const anyHeaders = response.headers as unknown as { getSetCookie?: () => string[] };
   if (typeof anyHeaders.getSetCookie === 'function') {
     return anyHeaders.getSetCookie().map((c) => c.split(';')[0]);
@@ -76,13 +91,11 @@ function extractSetCookies(response: Response): string[] {
   return single ? [single.split(';')[0]] : [];
 }
 
-/** Merge any Set-Cookie headers from a response into the session jar. */
+/** Merge any Set-Cookie headers from a response into the session jar (in place). */
 export function storeSetCookies(session: StooqSession, response: Response): void {
   for (const cookie of extractSetCookies(response)) {
     const idx = cookie.indexOf('=');
     if (idx <= 0) continue;
-    const name = cookie.slice(0, idx);
-    const value = cookie.slice(idx + 1);
-    session.cookies[name] = value;
+    session.cookies[cookie.slice(0, idx)] = cookie.slice(idx + 1);
   }
 }
