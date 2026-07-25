@@ -85,7 +85,7 @@ export async function fetchTwelveData(ticker: string): Promise<StooqDataPoint[]>
     `${TD_URL}?symbol=${encodeURIComponent(symbol)}${params}` +
     `&interval=1day&outputsize=5000&order=ASC&apikey=${encodeURIComponent(key)}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   const json: TwelveDataResponse = await res.json();
 
   if (json.status === 'error' || !json.values || json.values.length === 0) {

@@ -30,10 +30,14 @@ function setCookieHeader(res: Response): string {
 async function fetchCrumb(): Promise<{ cookie: string; crumb: string } | null> {
   if (crumbCache) return crumbCache;
   try {
-    const r1 = await fetch('https://fc.yahoo.com/', { headers: { 'User-Agent': UA } });
+    const r1 = await fetch('https://fc.yahoo.com/', {
+      cache: 'no-store',
+      headers: { 'User-Agent': UA },
+    });
     const cookie = setCookieHeader(r1);
     if (!cookie) return null;
     const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+      cache: 'no-store',
       headers: { 'User-Agent': UA, Cookie: cookie },
     });
     if (!r2.ok) return null;
@@ -58,6 +62,7 @@ async function yahooApiFetch(pathWithQuery: string): Promise<Response | null> {
     const base = `https://${host}${pathWithQuery}`;
     try {
       let res = await fetch(base, {
+        cache: 'no-store',
         headers: { 'User-Agent': UA, ...(crumbCache ? { Cookie: crumbCache.cookie } : {}) },
       });
       if (res.status === 401 || res.status === 403) {
@@ -65,6 +70,7 @@ async function yahooApiFetch(pathWithQuery: string): Promise<Response | null> {
         if (cr) {
           const sep = pathWithQuery.includes('?') ? '&' : '?';
           res = await fetch(`${base}${sep}crumb=${encodeURIComponent(cr.crumb)}`, {
+            cache: 'no-store',
             headers: { 'User-Agent': UA, Cookie: cr.cookie },
           });
         }

@@ -62,6 +62,10 @@ function stooqFetch(url: string, session: StooqSession, init?: RequestInit) {
   const cookie = serializeCookies(session);
   return fetch(url, {
     ...init,
+    // Never let Next.js cache these — a cached response replays no fresh
+    // Set-Cookie headers, which silently drops the per-visit session cookies
+    // (cookie_uu / uid) that Stooq's download grant requires.
+    cache: 'no-store',
     headers: {
       'User-Agent': UA,
       Referer: `${STOOQ_ORIGIN}/q/d/?s=`,
@@ -80,34 +84,63 @@ function downloadUrl(ticker: string, apiKey?: string): string {
 }
 
 /**
- * Fetch a URL within a session, transparently solving the proof-of-work
- * challenge if Stooq serves it, and merging all Set-Cookie headers into the jar.
+ * If `text` is Stooq's proof-of-work challenge page, solve it and POST the answer
+ * (which authorizes the session cookie). Returns true if a challenge was solved.
+ * Stooq can throw this challenge on ANY endpoint — pages, the download, the
+ * CAPTCHA image, and the CAPTCHA verify — so every request path must handle it.
  */
+async function solvePoWChallenge(text: string, session: StooqSession): Promise<boolean> {
+  if (!text.includes('This site requires JavaScript')) return false;
+  const match = text.match(/const c="([^"]+)",d=(\d+)/);
+  if (!match) {
+    throw new StooqBlockedError('Stooq returned an unrecognized anti-bot challenge page');
+  }
+  const n = solveProofOfWork(match[1], parseInt(match[2], 10));
+  const verifyRes = await stooqFetch(STOOQ_VERIFY_URL, session, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `c=${encodeURIComponent(match[1])}&n=${n}`,
+  });
+  storeSetCookies(session, verifyRes);
+  return true;
+}
+
+/** GET a URL as text, transparently solving a proof-of-work challenge if served. */
 async function fetchTextWithPoW(url: string, session: StooqSession): Promise<string> {
   let res = await stooqFetch(url, session);
   storeSetCookies(session, res);
   let text = await res.text();
-
-  if (text.includes('This site requires JavaScript')) {
-    const match = text.match(/const c="([^"]+)",d=(\d+)/);
-    if (!match) {
-      throw new StooqBlockedError('Stooq returned an unrecognized anti-bot challenge page');
-    }
-    const n = solveProofOfWork(match[1], parseInt(match[2], 10));
-
-    const verifyRes = await stooqFetch(STOOQ_VERIFY_URL, session, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `c=${encodeURIComponent(match[1])}&n=${n}`,
-    });
-    storeSetCookies(session, verifyRes);
-
+  if (await solvePoWChallenge(text, session)) {
     res = await stooqFetch(url, session);
     storeSetCookies(session, res);
     text = await res.text();
   }
-
   return text;
+}
+
+/** GET a URL as binary (e.g. the CAPTCHA PNG), solving a proof-of-work challenge if served. */
+async function fetchBinaryWithPoW(
+  url: string,
+  session: StooqSession
+): Promise<{ buffer: Buffer; contentType: string }> {
+  let res = await stooqFetch(url, session);
+  storeSetCookies(session, res);
+  let buffer = Buffer.from(await res.arrayBuffer());
+  let contentType = res.headers.get('content-type') || '';
+
+  // Detect a PoW challenge by the actual bytes, NOT the content-type header:
+  // Stooq sometimes serves the HTML challenge with content-type image/png. A
+  // real image starts with a binary magic byte; the challenge page starts with '<'.
+  if (buffer.length > 0 && buffer[0] === 0x3c /* '<' */) {
+    if (await solvePoWChallenge(buffer.toString('utf8'), session)) {
+      res = await stooqFetch(url, session);
+      storeSetCookies(session, res);
+      buffer = Buffer.from(await res.arrayBuffer());
+      contentType = res.headers.get('content-type') || '';
+    }
+  }
+
+  return { buffer, contentType: contentType.startsWith('image/') ? contentType : 'image/png' };
 }
 
 /**
@@ -141,13 +174,7 @@ export async function getStooqCaptchaImage(
   if (!session) {
     throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
-  const res = await stooqFetch(`${STOOQ_CAPTCHA_IMG_URL}?${Date.now()}`, session);
-  storeSetCookies(session, res);
-  const buffer = Buffer.from(await res.arrayBuffer());
-  return {
-    buffer,
-    contentType: res.headers.get('content-type') || 'image/png',
-  };
+  return fetchBinaryWithPoW(`${STOOQ_CAPTCHA_IMG_URL}?${Date.now()}`, session);
 }
 
 /**
@@ -160,12 +187,9 @@ export async function submitStooqCaptcha(token: string, code: string): Promise<b
     throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
   const answer = code.trim().toLowerCase();
-  const res = await stooqFetch(
-    `${STOOQ_CAPTCHA_CHECK_URL}?t=${encodeURIComponent(answer)}`,
-    session
-  );
-  storeSetCookies(session, res);
-  const body = (await res.text()).trim();
+  const body = (
+    await fetchTextWithPoW(`${STOOQ_CAPTCHA_CHECK_URL}?t=${encodeURIComponent(answer)}`, session)
+  ).trim();
   if (body === '1') {
     session.unlocked = true;
     return true;
@@ -174,22 +198,24 @@ export async function submitStooqCaptcha(token: string, code: string): Promise<b
 }
 
 /**
- * Create (or reuse) a Stooq session for downloading. If the session has not yet
- * cleared the CAPTCHA, throws StooqCaptchaRequiredError carrying the token the
- * client uses to fetch the image and submit the answer.
+ * Create (or reuse) a warmed-up Stooq session (proof-of-work solved, full cookie
+ * set collected) and return its token. Does NOT force a CAPTCHA — Stooq only
+ * requires one some of the time, so we let the actual download decide (see
+ * fetchStooqData). Often the warm-up cookies alone are enough to download.
  */
 export async function ensureStooqSession(token?: string): Promise<string> {
   const session = await ensurePowSession(token);
-  if (!session.unlocked) {
-    throw new StooqCaptchaRequiredError(session.token);
-  }
   return session.token;
 }
 
 /**
- * Fetch daily history CSV for one ticker from Stooq using an unlocked session.
- * Throws StooqCaptchaRequiredError if the session lost its unlocked state and a
- * fresh CAPTCHA is needed.
+ * Fetch daily history CSV for one ticker from Stooq.
+ *
+ * Tries the download directly with the warmed-up session. If Stooq returns
+ * "Odmowa" (access denied) it means a CAPTCHA is currently required: we throw
+ * StooqCaptchaRequiredError so the client can prompt for one. If the download is
+ * STILL denied after the user solved a CAPTCHA (session.unlocked), we stop with a
+ * clear block instead of looping.
  */
 export async function fetchStooqData(
   ticker: string,
@@ -203,9 +229,8 @@ export async function fetchStooqData(
     throw new StooqBlockedError('Stooq session expired. Please try again.');
   }
 
-  const res = await stooqFetch(downloadUrl(ticker, apiKey), session);
-  storeSetCookies(session, res);
-  const text = await res.text();
+  // Download, transparently solving a proof-of-work challenge if Stooq serves one.
+  const text = await fetchTextWithPoW(downloadUrl(ticker, apiKey), session);
 
   // Stooq caps how many downloads an IP may make per day.
   if (text.includes('Przekroczony dzienny limit')) {
@@ -214,15 +239,17 @@ export async function fetchStooqData(
     );
   }
 
-  // We only reach here with a CAPTCHA-unlocked session, so a denial now is NOT a
-  // CAPTCHA problem — it is Stooq blocking the download (almost always the per-IP
-  // daily quota). Re-prompting for a CAPTCHA would just loop endlessly, so we
-  // surface it as a clear block instead.
   if (text.includes('Odmowa') || text.includes('This site requires JavaScript')) {
-    throw new StooqBlockedError(
-      'Stooq denied the download despite a solved CAPTCHA — this is almost always the ' +
-        'per-IP daily download limit. Try again tomorrow, or use Yahoo Finance.'
-    );
+    if (session.unlocked) {
+      // A CAPTCHA was already solved for this session yet the download is still
+      // denied — don't loop; this is a temporary per-IP block or daily limit.
+      throw new StooqBlockedError(
+        'Stooq is still denying the download after a solved CAPTCHA — likely a temporary ' +
+          'per-IP block or daily limit. Try again later, or use Yahoo Finance.'
+      );
+    }
+    // First denial: Stooq wants a CAPTCHA right now — ask the client to prompt.
+    throw new StooqCaptchaRequiredError(session.token);
   }
 
   // "Brak danych" = no data for this symbol.
