@@ -2,12 +2,13 @@
 
 import { useState, FormEvent } from 'react';
 
-export type DataSource = 'stooq' | 'yahoo' | 'twelvedata';
+export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google';
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   stooq: 'Stooq',
   yahoo: 'Yahoo',
   twelvedata: 'Twelve Data',
+  google: 'Google',
 };
 
 const SOURCE_INFO: Record<DataSource, string> = {
@@ -17,6 +18,8 @@ const SOURCE_INFO: Record<DataSource, string> = {
     'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP (can be temporarily denied). No adjusted close.',
   twelvedata:
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
+  google:
+    'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Global stocks/ETFs/indices and FX (USDPLN=X); no crypto. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
 };
 
 interface TickerInputProps {
@@ -59,6 +62,13 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'BTC-USD', value: 'BTC-USD' },
     { label: 'USDPLN=X', value: 'USDPLN=X' },
   ],
+  google: [
+    { label: 'AAPL', value: 'AAPL' },
+    { label: 'MSFT', value: 'MSFT' },
+    { label: 'KGH.WA', value: 'KGH.WA' },
+    { label: 'IWDA.L', value: 'IWDA.L' },
+    { label: 'USDPLN=X', value: 'USDPLN=X' },
+  ],
 };
 
 export default function TickerInput({
@@ -88,6 +98,8 @@ export default function TickerInput({
       ? 'Enter Yahoo symbols or ISINs (e.g., KGH.WA, USDPLN=X, LU1662497327)'
       : source === 'twelvedata'
       ? 'Enter symbols (e.g., AAPL, BTC-USD, USDPLN=X)'
+      : source === 'google'
+      ? 'Enter symbols (e.g., AAPL, KGH.WA, IWDA.L, USDPLN=X)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
@@ -96,7 +108,7 @@ export default function TickerInput({
       <div className="mb-3 flex items-center gap-3">
         <span className="text-sm font-medium text-content">Data source:</span>
         <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-          {(['yahoo', 'stooq', 'twelvedata'] as DataSource[]).map((s) => (
+          {(['yahoo', 'stooq', 'twelvedata', 'google'] as DataSource[]).map((s) => (
             <button
               key={s}
               type="button"

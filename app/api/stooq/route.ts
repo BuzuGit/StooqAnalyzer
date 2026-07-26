@@ -7,16 +7,23 @@ import {
 } from '@/lib/stooq';
 import { fetchYahooData } from '@/lib/yahoo';
 import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
+import { fetchGoogleFinance, GoogleFinanceConfigError } from '@/lib/googlefinance';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
-type DataSource = 'stooq' | 'yahoo' | 'twelvedata';
+type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const tickersParam = searchParams.get('tickers');
   const rawSource = searchParams.get('source');
   const source: DataSource =
-    rawSource === 'stooq' ? 'stooq' : rawSource === 'twelvedata' ? 'twelvedata' : 'yahoo';
+    rawSource === 'stooq'
+      ? 'stooq'
+      : rawSource === 'twelvedata'
+      ? 'twelvedata'
+      : rawSource === 'google'
+      ? 'google'
+      : 'yahoo';
   const sessionToken = searchParams.get('session') || undefined;
 
   if (!tickersParam) {
@@ -53,6 +60,12 @@ export async function GET(request: NextRequest) {
       datasets = await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)));
     } else if (source === 'twelvedata') {
       datasets = await Promise.all(tickers.map((ticker) => fetchTwelveData(ticker)));
+    } else if (source === 'google') {
+      // The Apps Script proxy serializes on one sheet — fetch sequentially.
+      datasets = [];
+      for (const ticker of tickers) {
+        datasets.push(await fetchGoogleFinance(ticker));
+      }
     } else {
       const token = await ensureStooqSession(sessionToken);
       datasets = [];
@@ -99,7 +112,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (error instanceof TwelveDataConfigError) {
+    if (error instanceof TwelveDataConfigError || error instanceof GoogleFinanceConfigError) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: error.message },
         { status: 400 }

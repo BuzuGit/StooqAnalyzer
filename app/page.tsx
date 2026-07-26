@@ -399,6 +399,8 @@ export default function Home() {
               ? 'Yahoo examples: KGH.WA (stocks), USDPLN=X (FX), BTC-USD (crypto), IWDA.L (ETFs), or an ISIN (e.g. LU1662497327)'
               : source === 'twelvedata'
               ? 'Twelve Data examples: AAPL, MSFT, QQQ (US), BTC-USD (crypto), USDPLN=X (FX). Needs a free API key.'
+              : source === 'google'
+              ? 'Google Finance examples: AAPL, MSFT (US), KGH.WA (Warsaw), IWDA.L (London), USDPLN=X (FX). Via a Google Sheets proxy.'
               : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>
