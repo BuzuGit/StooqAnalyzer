@@ -16,7 +16,7 @@ const SOURCE_INFO: Record<DataSource, string> = {
   stooq:
     'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP (can be temporarily denied). No adjusted close.',
   twelvedata:
-    'Stable official API (needs a free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Adjusted close is derived from dividends (Close/Adj-Close toggle works). ~20y history, rate-limited.',
+    'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
 };
 
 interface TickerInputProps {
