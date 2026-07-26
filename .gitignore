@@ -45,3 +45,6 @@ _ul
 *.jpg
 *.png
 *.txt
+
+# Claude Code local (per-machine) settings — may contain secrets
+.claude/settings.local.json
