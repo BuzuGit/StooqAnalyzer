@@ -19,7 +19,7 @@ const SOURCE_INFO: Record<DataSource, string> = {
   twelvedata:
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
   google:
-    'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Global stocks/ETFs/indices and FX (USDPLN=X); no crypto. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
+    'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Use Google-native symbols: exchange-prefixed like WSE:WIG20, LON:VWRA, NYSEARCA:GLD; FX/crypto as CURRENCY:USDPLN, CURRENCY:BTCUSD. Covers global stocks/ETFs/indices. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
 };
 
 interface TickerInputProps {
@@ -63,11 +63,11 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'USDPLN=X', value: 'USDPLN=X' },
   ],
   google: [
-    { label: 'AAPL', value: 'AAPL' },
-    { label: 'MSFT', value: 'MSFT' },
-    { label: 'KGH.WA', value: 'KGH.WA' },
-    { label: 'IWDA.L', value: 'IWDA.L' },
-    { label: 'USDPLN=X', value: 'USDPLN=X' },
+    { label: 'WSE:WIG20', value: 'WSE:WIG20' },
+    { label: 'LON:VWRA', value: 'LON:VWRA' },
+    { label: 'NYSEARCA:GLD', value: 'NYSEARCA:GLD' },
+    { label: 'CURRENCY:BTCUSD', value: 'CURRENCY:BTCUSD' },
+    { label: 'WSE:ETFBM40TR', value: 'WSE:ETFBM40TR' },
   ],
 };
 
@@ -99,7 +99,7 @@ export default function TickerInput({
       : source === 'twelvedata'
       ? 'Enter symbols (e.g., AAPL, BTC-USD, USDPLN=X)'
       : source === 'google'
-      ? 'Enter symbols (e.g., AAPL, KGH.WA, IWDA.L, USDPLN=X)'
+      ? 'Enter Google symbols (e.g., WSE:WIG20, NYSEARCA:GLD, CURRENCY:BTCUSD)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (

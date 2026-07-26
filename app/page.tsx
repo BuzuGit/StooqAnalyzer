@@ -228,8 +228,7 @@ export default function Home() {
       <header className="bg-panel shadow-sm border-b border-line">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-content">Stooq Analyzer</h1>
-            <p className="text-sm text-muted">Stock and asset analytics with comprehensive statistics</p>
+            <h1 className="text-2xl font-bold text-content">Asset Analyzer</h1>
             <p className="text-xs text-muted mt-1">
               Compare assets by entering several tickers separated by commas — e.g.{' '}
               <span className="font-mono text-content">AAPL, MSFT</span>. They&apos;re normalized to a common
@@ -400,7 +399,7 @@ export default function Home() {
               : source === 'twelvedata'
               ? 'Twelve Data examples: AAPL, MSFT, QQQ (US), BTC-USD (crypto), USDPLN=X (FX). Needs a free API key.'
               : source === 'google'
-              ? 'Google Finance examples: AAPL, MSFT (US), KGH.WA (Warsaw), IWDA.L (London), USDPLN=X (FX). Via a Google Sheets proxy.'
+              ? 'Google Finance examples: WSE:WIG20, WSE:ETFBM40TR (Warsaw), LON:VWRA (London), NYSEARCA:GLD (US), CURRENCY:BTCUSD. Via a Google Sheets proxy.'
               : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>

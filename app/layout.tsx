@@ -6,8 +6,8 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Stooq Analyzer',
-  description: 'Stock and asset analytics with price charts and comprehensive statistics',
+  title: 'Asset Analyzer',
+  description: 'Asset price charts and comprehensive statistics',
 };
 
 // Runs before paint to set the theme class and avoid a flash of the wrong theme.
