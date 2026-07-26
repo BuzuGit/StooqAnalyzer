@@ -54,6 +54,13 @@ export async function fetchGoogleFinance(ticker: string): Promise<StooqDataPoint
   const url = `${base}${base.includes('?') ? '&' : '?'}ticker=${encodeURIComponent(symbol)}`;
 
   const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+  if (res.status === 401 || res.status === 403) {
+    throw new GoogleFinanceConfigError(
+      'Google Finance web app is not public (got ' +
+        res.status +
+        '). In Apps Script: Deploy → Manage deployments → edit → set "Who has access" to "Anyone", then redeploy and update GOOGLE_FINANCE_URL. (Workspace/org accounts may block "Anyone" — use a personal Gmail account.)'
+    );
+  }
   if (!res.ok) {
     throw new Error(`Google Finance request failed for ${ticker} (${symbol}): ${res.status}`);
   }
