@@ -1,6 +1,6 @@
 import { StooqDataPoint } from './types';
 
-const TD_URL = 'https://api.twelvedata.com/time_series';
+const TD_BASE = 'https://api.twelvedata.com';
 
 /** Raised when the Twelve Data API key isn't configured. */
 export class TwelveDataConfigError extends Error {
@@ -68,32 +68,69 @@ interface TwelveDataResponse {
   }>;
 }
 
+async function tdGet<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${TD_BASE}${path}`, { cache: 'no-store' });
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Fetch daily history from Twelve Data. Requires TWELVEDATA_API_KEY (free key at
- * twelvedata.com). Twelve Data's time_series returns raw OHLC (no adjusted close).
+ * Compute adjusted close from Twelve Data's (already split-adjusted) close plus
+ * dividends, working backward through the ascending series — the standard
+ * total-return method Yahoo uses. A dividend with ex-date E scales every earlier
+ * price by (1 - amount / close_{E-1}). Splits are NOT applied: Twelve Data's
+ * close and dividend amounts are both already split-adjusted to today's basis
+ * (applying splits again would double-count them). Mutates each point's `adjClose`.
+ */
+function applyAdjustedClose(points: StooqDataPoint[], dividends: Map<string, number>): void {
+  if (dividends.size === 0) return;
+  let factor = 1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    points[i].adjClose = points[i].close * factor;
+    const div = dividends.get(points[i].date);
+    if (div && i > 0 && points[i - 1].close > 0) {
+      factor *= 1 - div / points[i - 1].close;
+    }
+  }
+}
+
+/**
+ * Fetch daily history from Twelve Data. Requires TWELVEDATA_API_KEY. Twelve Data
+ * only returns raw OHLC, so for equities/ETFs we also pull /dividends and /splits
+ * and derive an adjusted close (skipped for FX/crypto, which have neither).
  */
 export async function fetchTwelveData(ticker: string): Promise<StooqDataPoint[]> {
   const key = process.env.TWELVEDATA_API_KEY;
   if (!key) {
     throw new TwelveDataConfigError(
-      'Twelve Data API key not configured. Add TWELVEDATA_API_KEY to .env.local (get a free key at twelvedata.com).'
+      'Twelve Data API key not configured. Add TWELVEDATA_API_KEY (free key at twelvedata.com) — on Vercel set it in Project → Settings → Environment Variables and redeploy.'
     );
   }
 
   const { symbol, params } = toTwelveDataSymbol(ticker);
-  const url =
-    `${TD_URL}?symbol=${encodeURIComponent(symbol)}${params}` +
-    `&interval=1day&outputsize=5000&order=ASC&apikey=${encodeURIComponent(key)}`;
+  const enc = encodeURIComponent(symbol);
+  const isFxOrCrypto = symbol.includes('/');
 
-  const res = await fetch(url, { cache: 'no-store' });
-  const json: TwelveDataResponse = await res.json();
+  const [ts, divData] = await Promise.all([
+    tdGet<TwelveDataResponse>(
+      `/time_series?symbol=${enc}${params}&interval=1day&outputsize=5000&order=ASC&apikey=${encodeURIComponent(key)}`
+    ),
+    isFxOrCrypto
+      ? Promise.resolve(null)
+      : tdGet<{ dividends?: Array<{ ex_date?: string; amount?: number }> }>(
+          `/dividends?symbol=${enc}${params}&range=full&apikey=${encodeURIComponent(key)}`
+        ),
+  ]);
 
-  if (json.status === 'error' || !json.values || json.values.length === 0) {
-    throw new Error(`Twelve Data: ${json.message || 'no data'} for ${ticker} (symbol ${symbol}).`);
+  if (!ts || ts.status === 'error' || !ts.values || ts.values.length === 0) {
+    throw new Error(`Twelve Data: ${ts?.message || 'no data'} for ${ticker} (symbol ${symbol}).`);
   }
 
   const data: StooqDataPoint[] = [];
-  for (const v of json.values) {
+  for (const v of ts.values) {
     const close = parseFloat(v.close);
     if (!isFinite(close) || close <= 0) continue;
     const open = parseFloat(v.open);
@@ -109,7 +146,13 @@ export async function fetchTwelveData(ticker: string): Promise<StooqDataPoint[]>
       volume: isFinite(volume) ? volume : 0,
     });
   }
-
   data.sort((a, b) => a.date.localeCompare(b.date));
+
+  const dividends = new Map<string, number>();
+  for (const d of divData?.dividends ?? []) {
+    if (d.ex_date && d.amount != null) dividends.set(d.ex_date, Number(d.amount));
+  }
+  applyAdjustedClose(data, dividends);
+
   return data;
 }
