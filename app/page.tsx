@@ -42,6 +42,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [focusedTickerIndex, setFocusedTickerIndex] = useState(0);
   const [source, setSource] = useState<DataSource>('yahoo');
+  // Source the currently loaded data actually came from (may differ from the
+  // selected `source` if the user switches the toggle without reloading).
+  const [dataSource, setDataSource] = useState<DataSource>('yahoo');
   const [priceBasis, setPriceBasis] = useState<PriceBasis>('close');
 
   // Stooq CAPTCHA flow state
@@ -129,6 +132,7 @@ export default function Home() {
 
         const data = result.data;
         setRawTickersData(data);
+        setDataSource(selectedSource);
         setFocusedTickerIndex(0);
 
         const { minDate, maxDate } = getDateRange(data);
@@ -192,7 +196,19 @@ export default function Home() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${rawTickersData.map((t) => t.ticker).join('_')}_export.xlsx`;
+      // Filename: Ticker(s)_Source_StartDate_EndDate.xlsx
+      const sourceName: Record<DataSource, string> = {
+        yahoo: 'YahooFinance',
+        google: 'GoogleFinance',
+        stooq: 'Stooq',
+        twelvedata: 'TwelveData',
+      };
+      const { minDate, maxDate } = getDateRange(rawTickersData);
+      const tickerPart = rawTickersData
+        .map((t) => t.ticker)
+        .join('_')
+        .replace(/[:/\\?*|"<>]/g, '-'); // strip filename-invalid chars (e.g. WSE:WIG20)
+      a.download = `${tickerPart}_${sourceName[dataSource]}_${minDate}_${maxDate}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -202,7 +218,7 @@ export default function Home() {
     } finally {
       setIsDownloading(false);
     }
-  }, [rawTickersData]);
+  }, [rawTickersData, dataSource]);
 
   const tickers = filteredTickersData.map((td) => td.ticker);
   const hasData = rawTickersData.length > 0;

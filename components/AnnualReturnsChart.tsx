@@ -161,7 +161,8 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
   // Positive bars were a near-black gray (#1f2937) that vanished on the dark
   // background — use a lighter slate in dark mode. Their value labels (drawn on
   // the chart background above the bar) likewise need a light color in dark.
-  const barColor = isDark ? '#94a3b8' : '#1f2937';
+  const barColor = isDark ? '#e5e7eb' : '#1f2937';
+  const negativeBarColor = '#dc2626';
   const barLabelColor = isDark ? '#e6e6e6' : '#000';
   const yearColor = isDark ? '#9ca3af' : '#6b7280';
   const athColor = isDark ? '#4ade80' : '#166534';
@@ -248,17 +249,21 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
 
           <ReferenceLine y={0} stroke="#9ca3af" strokeWidth={1} />
 
-          {/* Annual return bars */}
+          {/* Annual return bars — positive use the bar color, negative are red */}
           <Bar
             dataKey="annualReturn"
             fill={barColor}
             radius={[2, 2, 0, 0]}
             maxBarSize={40}
           >
-            {annualChartData.map((_entry, index) => (
+            {annualChartData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={barColor}
+                fill={
+                  entry.annualReturn !== null && entry.annualReturn < 0
+                    ? negativeBarColor
+                    : barColor
+                }
               />
             ))}
             <LabelList
@@ -403,7 +408,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
       {viewMode === 'annual' ? (
         <div className="flex gap-4 text-xs text-muted mb-2">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-gray-800 dark:bg-slate-400 rounded-sm"></div>
+            <div className="w-3 h-3 bg-gray-800 dark:bg-gray-200 rounded-sm"></div>
             <span>Annual Return (%)</span>
           </div>
           <div className="flex items-center gap-1">
@@ -418,7 +423,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
       ) : (
         <div className="flex gap-4 text-xs text-muted mb-2">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-gray-800 dark:bg-slate-400 rounded-sm"></div>
+            <div className="w-3 h-3 bg-gray-800 dark:bg-gray-200 rounded-sm"></div>
             <span>Positive Return</span>
           </div>
           <div className="flex items-center gap-1">
@@ -428,7 +433,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
         </div>
       )}
 
-      <div className="h-64">
+      <div className="h-96">
         {viewMode === 'annual' ? renderAnnualChart() : renderPeriodicChart()}
       </div>
     </div>

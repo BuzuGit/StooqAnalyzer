@@ -333,7 +333,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           <h2 className="text-lg font-semibold text-content">
             {isSingleTicker ? `${primaryTicker} Price & Drawdown` : 'Normalized Comparison (Base = 100)'}
             {isSingleTicker && periodCagr && (
-              <span className="ml-2 text-sm font-normal text-muted">
+              <span className="ml-2 text-sm font-semibold text-content">
                 (Period: {periodCagr.period} | CAGR: {periodCagr.cagr})
               </span>
             )}
