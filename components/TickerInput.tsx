@@ -15,7 +15,7 @@ const SOURCE_INFO: Record<DataSource, string> = {
   yahoo:
     'Broadest coverage: global stocks, ETFs, FX, crypto, and European funds by ISIN. Includes adjusted close (Close/Adj-Close toggle). Unofficial API — occasionally flaky. Indices (e.g. WIG20) have no history — use a tracking ETF.',
   stooq:
-    'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP (can be temporarily denied). No adjusted close.',
+    'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP. No adjusted close. On Vercel it also needs a fixed proxy (STOOQ_PROXY_URL) — Stooq blocks Vercel’s datacenter IPs even after a solved CAPTCHA.',
   twelvedata:
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
   google:

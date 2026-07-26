@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { ProxyAgent } from 'undici';
 import { StooqDataPoint } from './types';
 import {
   createSession,
@@ -18,6 +19,18 @@ const STOOQ_CAPTCHA_CHECK_URL = `${STOOQ_ORIGIN}/q/l/s/`;
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+// Optional proxy: on Vercel, Stooq requests come from rotating datacenter IPs,
+// which Stooq's anti-bot denies even after a solved CAPTCHA. Routing every Stooq
+// request through one fixed (ideally residential) proxy IP makes the whole flow
+// look like a single trusted browser — the way it does from a local machine.
+const STOOQ_PROXY_URL = process.env.STOOQ_PROXY_URL;
+const proxyDispatcher = STOOQ_PROXY_URL ? new ProxyAgent(STOOQ_PROXY_URL) : undefined;
+
+/** True when a fixed egress proxy is configured for Stooq. */
+export function hasStooqProxy(): boolean {
+  return proxyDispatcher !== undefined;
+}
 
 /** Raised when Stooq serves its anti-bot page instead of data. */
 export class StooqBlockedError extends Error {
@@ -68,6 +81,10 @@ function stooqFetch(url: string, session: StooqSession, init?: RequestInit) {
     // Set-Cookie headers, which silently drops the per-visit session cookies
     // (cookie_uu / uid) that Stooq's download grant requires.
     cache: 'no-store',
+    // Route through the fixed proxy (if configured) so every request in the flow
+    // shares one egress IP. `dispatcher` is a valid undici/Node fetch option even
+    // though it's not in the DOM RequestInit type.
+    ...(proxyDispatcher ? ({ dispatcher: proxyDispatcher } as object) : {}),
     headers: {
       'User-Agent': UA,
       Referer: `${STOOQ_ORIGIN}/q/d/?s=`,
@@ -255,11 +272,19 @@ export async function fetchStooqData(
 
   if (text.includes('Odmowa') || text.includes('This site requires JavaScript')) {
     if (session.unlocked) {
-      // A CAPTCHA was already solved for this session yet the download is still
-      // denied — don't loop; this is a temporary per-IP block or daily limit.
+      // CAPTCHA was solved yet the download is still denied — don't loop.
+      // On Vercel without a proxy this is the datacenter-IP block: Stooq denies
+      // downloads from datacenter IPs even after a correct CAPTCHA.
+      if (process.env.VERCEL && !hasStooqProxy()) {
+        throw new StooqBlockedError(
+          "Stooq denied the download even though the CAPTCHA was correct — Vercel's datacenter IP is " +
+            'blocked by Stooq. Set STOOQ_PROXY_URL (a fixed, ideally residential proxy) in Vercel so ' +
+            'Stooq requests come from one trusted IP. Meanwhile, use Yahoo, Twelve Data or Google.'
+        );
+      }
       throw new StooqBlockedError(
-        'Stooq is still denying the download after a solved CAPTCHA — likely a temporary ' +
-          'per-IP block or daily limit. Try again later, or use Yahoo Finance.'
+        'Stooq is still denying the download after a solved CAPTCHA — a temporary per-IP block or ' +
+          'daily limit. Try again later, or use another source.'
       );
     }
     // First denial: Stooq wants a CAPTCHA right now — ask the client to prompt.
