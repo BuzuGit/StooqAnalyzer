@@ -520,6 +520,8 @@ export interface YearlyData {
   year: number;
   monthlyReturns: (number | null)[]; // 12 months, index 0 = Jan
   monthlyDetails: ReturnCalcDetail[]; // 12 months with price details
+  quarterlyReturns: (number | null)[]; // 4 quarters, index 0 = Q1
+  quarterlyDetails: ReturnCalcDetail[]; // 4 quarters with price details
   annualReturn: number | null;
   annualDetail: ReturnCalcDetail; // Price details for annual return
   annualStd: number | null;
@@ -669,6 +671,43 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
       }
     }
 
+    // Quarterly returns: compound the months present in each quarter, so a
+    // partial quarter (the current one) still reports what has happened so far.
+    const quarterlyReturns: (number | null)[] = new Array(4).fill(null);
+    const quarterlyDetails: ReturnCalcDetail[] = new Array(4).fill(null).map(() => ({
+      returnValue: null,
+      startPrice: null,
+      endPrice: null,
+      startDate: null,
+      endDate: null,
+    }));
+
+    for (let quarter = 0; quarter < 4; quarter++) {
+      const monthsInQuarter = [quarter * 3, quarter * 3 + 1, quarter * 3 + 2];
+      const present = monthsInQuarter.filter((m) => monthlyReturns[m] !== null);
+      if (present.length === 0) continue;
+
+      let compound = 1;
+      for (const m of present) {
+        compound *= 1 + monthlyReturns[m]! / 100;
+      }
+      const quarterReturn = (compound - 1) * 100;
+
+      // The months telescope, so the quarter runs from the first month's start
+      // price to the last month's end price.
+      const firstMonth = monthlyDetails[present[0]];
+      const lastMonth = monthlyDetails[present[present.length - 1]];
+
+      quarterlyReturns[quarter] = quarterReturn;
+      quarterlyDetails[quarter] = {
+        returnValue: quarterReturn,
+        startPrice: firstMonth.startPrice,
+        endPrice: lastMonth.endPrice,
+        startDate: firstMonth.startDate,
+        endDate: lastMonth.endDate,
+      };
+    }
+
     // Calculate annual return (last price Dec current year vs last price Dec prior year)
     // For partial years: last available price vs last price Dec prior year
     let annualReturn: number | null = null;
@@ -765,6 +804,8 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
       year,
       monthlyReturns,
       monthlyDetails,
+      quarterlyReturns,
+      quarterlyDetails,
       annualReturn,
       annualDetail,
       annualStd,
