@@ -12,6 +12,7 @@ import TrendFollowingSection from '@/components/TrendFollowingSection';
 import RollingReturnsChart from '@/components/RollingReturnsChart';
 import AnnualReturnsChart from '@/components/AnnualReturnsChart';
 import ReturnsTable from '@/components/ReturnsTable';
+import CorrelationTable from '@/components/CorrelationTable';
 import { TickerData, ChartDataPoint, Statistics, ApiResponse } from '@/lib/types';
 import {
   calculateStatistics,
@@ -346,6 +347,9 @@ export default function Home() {
             <StatsPanel statistics={statistics} isLoading={isLoading} />
           </div>
         </div>
+
+        {/* Correlation between assets - Only for multi-ticker */}
+        {tickers.length > 1 && <CorrelationTable tickersData={filteredTickersData} />}
 
         {/* Focus asset selector - Only for multi-ticker */}
         {tickers.length > 1 && (

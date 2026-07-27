@@ -829,6 +829,212 @@ export function calculateRollingReturns(
 }
 
 // ============================================
+// CORRELATION BETWEEN ASSETS
+// ============================================
+
+export type CorrelationFrequency = 'daily' | 'monthly';
+
+export type CorrelationPeriodKey = '1Y' | '3Y' | '5Y' | '10Y' | 'MAX';
+
+export const CORRELATION_PERIODS: {
+  key: CorrelationPeriodKey;
+  label: string;
+  years: number | null; // null = full overlapping history
+}[] = [
+  { key: '1Y', label: '1Y', years: 1 },
+  { key: '3Y', label: '3Y', years: 3 },
+  { key: '5Y', label: '5Y', years: 5 },
+  { key: '10Y', label: '10Y', years: 10 },
+  { key: 'MAX', label: 'Max', years: null },
+];
+
+// Below this many paired returns a correlation is too noisy to be worth showing.
+const MIN_CORRELATION_OBSERVATIONS: Record<CorrelationFrequency, number> = {
+  daily: 20,
+  monthly: 6,
+};
+
+export interface CorrelationCell {
+  /** Pearson correlation of the two return series, or null when there is too little overlap. */
+  value: number | null;
+  observations: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface CorrelationPair {
+  tickerA: string;
+  tickerB: string;
+  periods: Record<CorrelationPeriodKey, CorrelationCell>;
+}
+
+interface PairedReturn {
+  date: string;     // end of the return interval
+  prevDate: string; // start of the return interval
+  retA: number;
+  retB: number;
+}
+
+/**
+ * Reduce a price series to the points correlation is measured on.
+ * Daily uses every trading day; monthly uses the last close of each calendar
+ * month, keyed by YYYY-MM so two assets can be aligned even when their last
+ * trading day of the month differs.
+ */
+function correlationPriceSeries(
+  data: StooqDataPoint[],
+  frequency: CorrelationFrequency
+): { key: string; date: string; close: number }[] {
+  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
+
+  if (frequency === 'daily') {
+    return sorted.map((p) => ({ key: p.date, date: p.date, close: p.close }));
+  }
+
+  const byMonth = new Map<string, { key: string; date: string; close: number }>();
+  for (const p of sorted) {
+    const key = p.date.substring(0, 7); // YYYY-MM
+    byMonth.set(key, { key, date: p.date, close: p.close });
+  }
+  return Array.from(byMonth.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Number of calendar months between two YYYY-MM keys. */
+function monthGap(fromKey: string, toKey: string): number {
+  const [fy, fm] = fromKey.split('-').map(Number);
+  const [ty, tm] = toKey.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+/**
+ * Build the two return series over the dates (or months) both assets have data
+ * for, so each observation is a genuine like-for-like pair.
+ */
+function pairedReturns(
+  dataA: StooqDataPoint[],
+  dataB: StooqDataPoint[],
+  frequency: CorrelationFrequency
+): PairedReturn[] {
+  const seriesA = correlationPriceSeries(dataA, frequency);
+  const seriesB = correlationPriceSeries(dataB, frequency);
+
+  const byKeyB = new Map(seriesB.map((p) => [p.key, p]));
+  const common = seriesA.filter((p) => byKeyB.has(p.key));
+
+  const result: PairedReturn[] = [];
+  for (let i = 1; i < common.length; i++) {
+    const prev = common[i - 1];
+    const curr = common[i];
+
+    // Monthly: skip intervals spanning a missing month, which would otherwise
+    // be compared against a single-month return of the other asset.
+    if (frequency === 'monthly' && monthGap(prev.key, curr.key) !== 1) continue;
+
+    const prevB = byKeyB.get(prev.key)!;
+    const currB = byKeyB.get(curr.key)!;
+
+    if (prev.close <= 0 || prevB.close <= 0) continue;
+
+    result.push({
+      date: curr.date,
+      prevDate: prev.date,
+      retA: (curr.close - prev.close) / prev.close,
+      retB: (currB.close - prevB.close) / prevB.close,
+    });
+  }
+
+  return result;
+}
+
+function pearsonCorrelation(xs: number[], ys: number[]): number | null {
+  const n = xs.length;
+  if (n < 2) return null;
+
+  let sumX = 0;
+  let sumY = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += xs[i];
+    sumY += ys[i];
+  }
+  const meanX = sumX / n;
+  const meanY = sumY / n;
+
+  let cov = 0;
+  let varX = 0;
+  let varY = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - meanX;
+    const dy = ys[i] - meanY;
+    cov += dx * dy;
+    varX += dx * dx;
+    varY += dy * dy;
+  }
+
+  // A flat series has no variance, so correlation is undefined.
+  if (varX <= 0 || varY <= 0) return null;
+
+  const r = cov / Math.sqrt(varX * varY);
+  // Clamp away floating-point overshoot past ±1.
+  return Math.max(-1, Math.min(1, r));
+}
+
+function yearsBefore(dateStr: string, years: number): string {
+  const d = new Date(dateStr);
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Correlation of every asset pair over 1Y / 3Y / 5Y / full overlapping history.
+ * Periods are anchored to the last date the pair has in common, so they follow
+ * whatever date range the user has selected.
+ */
+export function calculateCorrelations(
+  tickersData: TickerData[],
+  frequency: CorrelationFrequency
+): CorrelationPair[] {
+  if (tickersData.length < 2) return [];
+
+  const pairs: CorrelationPair[] = [];
+
+  for (let i = 0; i < tickersData.length; i++) {
+    for (let j = i + 1; j < tickersData.length; j++) {
+      const observations = pairedReturns(tickersData[i].data, tickersData[j].data, frequency);
+      const lastDate = observations.length > 0 ? observations[observations.length - 1].date : null;
+
+      const periods = {} as Record<CorrelationPeriodKey, CorrelationCell>;
+
+      for (const period of CORRELATION_PERIODS) {
+        const slice =
+          period.years === null || lastDate === null
+            ? observations
+            : observations.filter((o) => o.date > yearsBefore(lastDate, period.years!));
+
+        const value =
+          slice.length >= MIN_CORRELATION_OBSERVATIONS[frequency]
+            ? pearsonCorrelation(slice.map((o) => o.retA), slice.map((o) => o.retB))
+            : null;
+
+        periods[period.key] = {
+          value,
+          observations: slice.length,
+          startDate: slice.length > 0 ? slice[0].prevDate : null,
+          endDate: slice.length > 0 ? slice[slice.length - 1].date : null,
+        };
+      }
+
+      pairs.push({
+        tickerA: tickersData[i].ticker,
+        tickerB: tickersData[j].ticker,
+        periods,
+      });
+    }
+  }
+
+  return pairs;
+}
+
+// ============================================
 // TREND FOLLOWING STRATEGY CALCULATIONS
 // ============================================
 
