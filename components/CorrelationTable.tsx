@@ -126,7 +126,8 @@ export default function CorrelationTable({ tickersData }: CorrelationTableProps)
           <tbody>
             {pairs.map((pair, index) => (
               <tr
-                key={`${pair.tickerA}|${pair.tickerB}`}
+                // Index included because the same ticker can be entered twice.
+                key={`${pair.tickerA}|${pair.tickerB}|${index}`}
                 className={index % 2 === 0 ? 'bg-panel' : 'bg-panel-2'}
               >
                 <td className="px-2 py-1.5 font-medium text-content border-r border-line whitespace-nowrap">

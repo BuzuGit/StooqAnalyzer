@@ -875,6 +875,12 @@ interface PairedReturn {
   retB: number;
 }
 
+interface CorrelationPricePoint {
+  key: string; // alignment key: the date (daily) or YYYY-MM (monthly)
+  date: string;
+  close: number;
+}
+
 /**
  * Reduce a price series to the points correlation is measured on.
  * Daily uses every trading day; monthly uses the last close of each calendar
@@ -884,14 +890,14 @@ interface PairedReturn {
 function correlationPriceSeries(
   data: StooqDataPoint[],
   frequency: CorrelationFrequency
-): { key: string; date: string; close: number }[] {
+): CorrelationPricePoint[] {
   const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
 
   if (frequency === 'daily') {
     return sorted.map((p) => ({ key: p.date, date: p.date, close: p.close }));
   }
 
-  const byMonth = new Map<string, { key: string; date: string; close: number }>();
+  const byMonth = new Map<string, CorrelationPricePoint>();
   for (const p of sorted) {
     const key = p.date.substring(0, 7); // YYYY-MM
     byMonth.set(key, { key, date: p.date, close: p.close });
@@ -908,16 +914,14 @@ function monthGap(fromKey: string, toKey: string): number {
 
 /**
  * Build the two return series over the dates (or months) both assets have data
- * for, so each observation is a genuine like-for-like pair.
+ * for, so each observation is a genuine like-for-like pair. Both inputs must be
+ * sorted ascending, which keeps the result ascending by date too.
  */
 function pairedReturns(
-  dataA: StooqDataPoint[],
-  dataB: StooqDataPoint[],
+  seriesA: CorrelationPricePoint[],
+  seriesB: CorrelationPricePoint[],
   frequency: CorrelationFrequency
 ): PairedReturn[] {
-  const seriesA = correlationPriceSeries(dataA, frequency);
-  const seriesB = correlationPriceSeries(dataB, frequency);
-
   const byKeyB = new Map(seriesB.map((p) => [p.key, p]));
   const common = seriesA.filter((p) => byKeyB.has(p.key));
 
@@ -935,57 +939,82 @@ function pairedReturns(
 
     if (prev.close <= 0 || prevB.close <= 0) continue;
 
-    result.push({
-      date: curr.date,
-      prevDate: prev.date,
-      retA: (curr.close - prev.close) / prev.close,
-      retB: (currB.close - prevB.close) / prevB.close,
-    });
+    const retA = (curr.close - prev.close) / prev.close;
+    const retB = (currB.close - prevB.close) / prevB.close;
+
+    // Bad ticks (NaN/Infinity) would poison the whole correlation.
+    if (!Number.isFinite(retA) || !Number.isFinite(retB)) continue;
+
+    result.push({ date: curr.date, prevDate: prev.date, retA, retB });
   }
 
   return result;
 }
 
-function pearsonCorrelation(xs: number[], ys: number[]): number | null {
-  const n = xs.length;
+/**
+ * Pearson correlation over returns[startIndex..end], computed in place so no
+ * intermediate arrays are allocated per period.
+ */
+function pearsonCorrelation(returns: PairedReturn[], startIndex: number): number | null {
+  const n = returns.length - startIndex;
   if (n < 2) return null;
 
-  let sumX = 0;
-  let sumY = 0;
-  for (let i = 0; i < n; i++) {
-    sumX += xs[i];
-    sumY += ys[i];
+  let sumA = 0;
+  let sumB = 0;
+  for (let i = startIndex; i < returns.length; i++) {
+    sumA += returns[i].retA;
+    sumB += returns[i].retB;
   }
-  const meanX = sumX / n;
-  const meanY = sumY / n;
+  const meanA = sumA / n;
+  const meanB = sumB / n;
 
   let cov = 0;
-  let varX = 0;
-  let varY = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = xs[i] - meanX;
-    const dy = ys[i] - meanY;
-    cov += dx * dy;
-    varX += dx * dx;
-    varY += dy * dy;
+  let varA = 0;
+  let varB = 0;
+  for (let i = startIndex; i < returns.length; i++) {
+    const da = returns[i].retA - meanA;
+    const db = returns[i].retB - meanB;
+    cov += da * db;
+    varA += da * da;
+    varB += db * db;
   }
 
   // A flat series has no variance, so correlation is undefined.
-  if (varX <= 0 || varY <= 0) return null;
+  if (varA <= 0 || varB <= 0) return null;
 
-  const r = cov / Math.sqrt(varX * varY);
+  const r = cov / Math.sqrt(varA * varB);
+  if (!Number.isFinite(r)) return null;
+
   // Clamp away floating-point overshoot past ±1.
   return Math.max(-1, Math.min(1, r));
 }
 
+/**
+ * Same calendar day N years earlier, as a YYYY-MM-DD string. Kept as string
+ * arithmetic so the boundary can't drift with the viewer's timezone.
+ */
 function yearsBefore(dateStr: string, years: number): string {
-  const d = new Date(dateStr);
-  d.setFullYear(d.getFullYear() - years);
-  return d.toISOString().slice(0, 10);
+  const year = Number(dateStr.slice(0, 4)) - years;
+  return `${String(year).padStart(4, '0')}${dateStr.slice(4)}`;
 }
 
 /**
- * Correlation of every asset pair over 1Y / 3Y / 5Y / full overlapping history.
+ * Index of the first return after `cutoff`. Returns are ascending by date, so
+ * every period is a suffix of the array and can be located by binary search.
+ */
+function firstIndexAfter(returns: PairedReturn[], cutoff: string): number {
+  let lo = 0;
+  let hi = returns.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (returns[mid].date > cutoff) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/**
+ * Correlation of every asset pair over each window in CORRELATION_PERIODS.
  * Periods are anchored to the last date the pair has in common, so they follow
  * whatever date range the user has selected.
  */
@@ -995,31 +1024,33 @@ export function calculateCorrelations(
 ): CorrelationPair[] {
   if (tickersData.length < 2) return [];
 
+  // Build each asset's series once, not once per pair it appears in.
+  const series = tickersData.map((td) => correlationPriceSeries(td.data, frequency));
+
   const pairs: CorrelationPair[] = [];
 
   for (let i = 0; i < tickersData.length; i++) {
     for (let j = i + 1; j < tickersData.length; j++) {
-      const observations = pairedReturns(tickersData[i].data, tickersData[j].data, frequency);
-      const lastDate = observations.length > 0 ? observations[observations.length - 1].date : null;
+      const allReturns = pairedReturns(series[i], series[j], frequency);
+      const lastDate = allReturns.length > 0 ? allReturns[allReturns.length - 1].date : null;
 
       const periods = {} as Record<CorrelationPeriodKey, CorrelationCell>;
 
       for (const period of CORRELATION_PERIODS) {
-        const slice =
+        const startIndex =
           period.years === null || lastDate === null
-            ? observations
-            : observations.filter((o) => o.date > yearsBefore(lastDate, period.years!));
-
-        const value =
-          slice.length >= MIN_CORRELATION_OBSERVATIONS[frequency]
-            ? pearsonCorrelation(slice.map((o) => o.retA), slice.map((o) => o.retB))
-            : null;
+            ? 0
+            : firstIndexAfter(allReturns, yearsBefore(lastDate, period.years));
+        const count = allReturns.length - startIndex;
 
         periods[period.key] = {
-          value,
-          observations: slice.length,
-          startDate: slice.length > 0 ? slice[0].prevDate : null,
-          endDate: slice.length > 0 ? slice[slice.length - 1].date : null,
+          value:
+            count >= MIN_CORRELATION_OBSERVATIONS[frequency]
+              ? pearsonCorrelation(allReturns, startIndex)
+              : null,
+          observations: count,
+          startDate: count > 0 ? allReturns[startIndex].prevDate : null,
+          endDate: count > 0 ? allReturns[allReturns.length - 1].date : null,
         };
       }
 
