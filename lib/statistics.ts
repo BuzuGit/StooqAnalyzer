@@ -586,9 +586,12 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
   const dataByYearMonth = new Map<string, StooqDataPoint[]>();
 
   for (const point of data) {
-    const date = new Date(point.date);
-    const year = date.getFullYear();
-    const month = date.getMonth(); // 0-11
+    // Bucket straight off the YYYY-MM-DD string. Parsing it to a Date reads it
+    // as UTC midnight but reports the calendar fields in the viewer's local
+    // timezone, so west of UTC a bar dated Jan 1 would land in the previous
+    // December and shift that year's returns.
+    const year = Number(point.date.slice(0, 4));
+    const month = Number(point.date.slice(5, 7)) - 1; // 0-11
     const key = `${year}-${month}`;
 
     if (!dataByYearMonth.has(key)) {
@@ -606,7 +609,7 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
   });
 
   // Get unique years sorted
-  const years = [...new Set(data.map(d => new Date(d.date).getFullYear()))].sort();
+  const years = [...new Set(data.map(d => Number(d.date.slice(0, 4))))].sort((a, b) => a - b);
 
   // Calculate ATH counts per year (new all-time highs reached)
   // Sort all data chronologically first
@@ -615,7 +618,7 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
   let globalATH = sortedData[0].close;
 
   for (const point of sortedData) {
-    const year = new Date(point.date).getFullYear();
+    const year = Number(point.date.slice(0, 4));
     if (point.close > globalATH) {
       globalATH = point.close;
       athCountByYear.set(year, (athCountByYear.get(year) || 0) + 1);
