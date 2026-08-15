@@ -2,13 +2,14 @@
 
 import { useState, FormEvent } from 'react';
 
-export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google';
+export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp';
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   stooq: 'Stooq',
   yahoo: 'Yahoo',
   twelvedata: 'Twelve Data',
   google: 'Google',
+  nbp: 'NBP',
 };
 
 const SOURCE_INFO: Record<DataSource, string> = {
@@ -20,6 +21,8 @@ const SOURCE_INFO: Record<DataSource, string> = {
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
   google:
     'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Use Google-native symbols: exchange-prefixed like WSE:WIG20, LON:VWRA, NYSEARCA:GLD; FX/crypto as CURRENCY:USDPLN, CURRENCY:BTCUSD. Covers global stocks/ETFs/indices. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
+  nbp:
+    'Official National Bank of Poland reference rates — free, no API key, no CAPTCHA and no IP blocking. Table A mid rates for 32 currencies against PLN, every business day since 2002-01-02, plus the NBP gold fixing (XAUPLN = PLN per gram) since 2013-01-02. Write pairs as USDPLN; PLNUSD inverts, and any two codes cross via their PLN legs (EURUSD, XAUUSD). FX and gold only — no stocks, ETFs or indices. One fixing per day, so there is no OHLC range, no volume and no adjusted close.',
 };
 
 interface TickerInputProps {
@@ -69,6 +72,17 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'CURRENCY:BTCUSD', value: 'CURRENCY:BTCUSD' },
     { label: 'WSE:ETFBM40TR', value: 'WSE:ETFBM40TR' },
   ],
+  nbp: [
+    { label: 'USDPLN', value: 'USDPLN' },
+    { label: 'EURPLN', value: 'EURPLN' },
+    { label: 'GBPPLN', value: 'GBPPLN' },
+    { label: 'CHFPLN', value: 'CHFPLN' },
+    { label: 'JPYPLN', value: 'JPYPLN' },
+    { label: 'XAUPLN (gold, PLN/g)', value: 'XAUPLN' },
+    { label: 'EURUSD (cross)', value: 'EURUSD' },
+    { label: 'PLNUSD (inverse)', value: 'PLNUSD' },
+    { label: 'USD vs EUR vs CHF', value: 'USDPLN,EURPLN,CHFPLN' },
+  ],
 };
 
 export default function TickerInput({
@@ -100,6 +114,8 @@ export default function TickerInput({
       ? 'Enter symbols (e.g., AAPL, BTC-USD, USDPLN=X)'
       : source === 'google'
       ? 'Enter Google symbols (e.g., WSE:WIG20, NYSEARCA:GLD, CURRENCY:BTCUSD)'
+      : source === 'nbp'
+      ? 'Enter NBP pairs (e.g., USDPLN, EURPLN, XAUPLN, EURUSD)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
@@ -108,7 +124,7 @@ export default function TickerInput({
       <div className="mb-3 flex items-center gap-3">
         <span className="text-sm font-medium text-content">Data source:</span>
         <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-          {(['yahoo', 'stooq', 'twelvedata', 'google'] as DataSource[]).map((s) => (
+          {(['yahoo', 'stooq', 'twelvedata', 'google', 'nbp'] as DataSource[]).map((s) => (
             <button
               key={s}
               type="button"
