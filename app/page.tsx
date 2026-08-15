@@ -12,6 +12,7 @@ import TrendFollowingSection from '@/components/TrendFollowingSection';
 import RollingReturnsChart from '@/components/RollingReturnsChart';
 import AnnualReturnsChart from '@/components/AnnualReturnsChart';
 import ReturnsTable from '@/components/ReturnsTable';
+import MonthEndPriceTable from '@/components/MonthEndPriceTable';
 import CorrelationTable from '@/components/CorrelationTable';
 import { TickerData, ChartDataPoint, Statistics, ApiResponse } from '@/lib/types';
 import {
@@ -391,6 +392,11 @@ export default function Home() {
         {/* Monthly Returns Table */}
         {tickers.length >= 1 && returnsTableData.length > 0 && (
           <ReturnsTable data={returnsTableData} ticker={focusedTicker} />
+        )}
+
+        {/* Month-End Price Table */}
+        {tickers.length >= 1 && returnsTableData.length > 0 && (
+          <MonthEndPriceTable data={returnsTableData} ticker={focusedTicker} />
         )}
 
         {/* Footer Info */}
