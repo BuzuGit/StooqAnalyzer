@@ -203,6 +203,7 @@ export default function Home() {
         google: 'GoogleFinance',
         stooq: 'Stooq',
         twelvedata: 'TwelveData',
+        nbp: 'NBP',
       };
       const { minDate, maxDate } = getDateRange(rawTickersData);
       const tickerPart = rawTickersData
@@ -420,6 +421,8 @@ export default function Home() {
               ? 'Twelve Data examples: AAPL, MSFT, QQQ (US), BTC-USD (crypto), USDPLN=X (FX). Needs a free API key.'
               : source === 'google'
               ? 'Google Finance examples: WSE:WIG20, WSE:ETFBM40TR (Warsaw), LON:VWRA (London), NYSEARCA:GLD (US), CURRENCY:BTCUSD. Via a Google Sheets proxy.'
+              : source === 'nbp'
+              ? 'NBP examples: USDPLN, EURPLN, CHFPLN (table A vs PLN), XAUPLN (gold, PLN per gram), EURUSD (cross), PLNUSD (inverse). Official rates, no API key.'
               : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
           </p>
         </footer>

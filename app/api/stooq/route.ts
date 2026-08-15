@@ -8,9 +8,10 @@ import {
 import { fetchYahooData } from '@/lib/yahoo';
 import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
 import { fetchGoogleFinance, GoogleFinanceConfigError } from '@/lib/googlefinance';
+import { fetchNbpData, NbpTickerError } from '@/lib/nbp';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
-type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google';
+type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
       ? 'twelvedata'
       : rawSource === 'google'
       ? 'google'
+      : rawSource === 'nbp'
+      ? 'nbp'
       : 'yahoo';
   const sessionToken = searchParams.get('session') || undefined;
 
@@ -60,6 +63,13 @@ export async function GET(request: NextRequest) {
       datasets = await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)));
     } else if (source === 'twelvedata') {
       datasets = await Promise.all(tickers.map((ticker) => fetchTwelveData(ticker)));
+    } else if (source === 'nbp') {
+      // Each pair already fans out ~25 windowed requests internally, so keep the
+      // tickers themselves sequential rather than multiplying that against NBP.
+      datasets = [];
+      for (const ticker of tickers) {
+        datasets.push(await fetchNbpData(ticker));
+      }
     } else if (source === 'google') {
       // The Apps Script proxy serializes on one sheet — fetch sequentially.
       datasets = [];
@@ -112,7 +122,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (error instanceof TwelveDataConfigError || error instanceof GoogleFinanceConfigError) {
+    if (
+      error instanceof TwelveDataConfigError ||
+      error instanceof GoogleFinanceConfigError ||
+      error instanceof NbpTickerError
+    ) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: error.message },
         { status: 400 }
