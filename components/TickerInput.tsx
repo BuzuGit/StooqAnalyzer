@@ -93,6 +93,7 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'M2SL (money supply)', value: 'M2SL' },
     { label: 'WALCL (Fed balance sheet)', value: 'WALCL' },
     { label: 'DGS10 (10y yield)', value: 'DGS10' },
+    { label: 'T10YIE (10y breakeven)', value: 'T10YIE' },
     { label: 'UNRATE (unemployment)', value: 'UNRATE' },
     { label: 'GDPC1 (real GDP)', value: 'GDPC1' },
     { label: 'VIXCLS (VIX)', value: 'VIXCLS' },
