@@ -520,6 +520,13 @@ export interface YearlyData {
   year: number;
   monthlyReturns: (number | null)[]; // 12 months, index 0 = Jan
   monthlyDetails: ReturnCalcDetail[]; // 12 months with price details
+  /** Closing price on the last session of each month; null where the month has no data. */
+  monthEndPrices: (number | null)[]; // 12 months, index 0 = Jan
+  /** The session that price came from — the last trading day, not the calendar month end. */
+  monthEndDates: (string | null)[]; // 12 months, index 0 = Jan
+  /** Last month-end price of the year (December, or the latest month in a partial year). */
+  yearEndPrice: number | null;
+  yearEndDate: string | null;
   quarterlyReturns: (number | null)[]; // 4 quarters, index 0 = Q1
   quarterlyDetails: ReturnCalcDetail[]; // 4 quarters with price details
   annualReturn: number | null;
@@ -674,6 +681,29 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
       }
     }
 
+    // Month-end closes, taken straight from the month-end map rather than from
+    // monthlyDetails — a month only gets a *return* when the prior month also has
+    // data, but its closing price exists regardless (notably the series' first month).
+    const monthEndPrices: (number | null)[] = new Array(12).fill(null);
+    const monthEndDates: (string | null)[] = new Array(12).fill(null);
+    for (let month = 0; month < 12; month++) {
+      const key = `${year}-${month}`;
+      monthEndPrices[month] = lastPriceByYearMonth.get(key) ?? null;
+      monthEndDates[month] = lastDateByYearMonth.get(key) ?? null;
+    }
+
+    // Year end = the latest month that actually has data, so a partial year
+    // reports its most recent month-end rather than a blank December.
+    let yearEndPrice: number | null = null;
+    let yearEndDate: string | null = null;
+    for (let month = 11; month >= 0; month--) {
+      if (monthEndPrices[month] !== null) {
+        yearEndPrice = monthEndPrices[month];
+        yearEndDate = monthEndDates[month];
+        break;
+      }
+    }
+
     // Quarterly returns: compound the months present in each quarter, so a
     // partial quarter (the current one) still reports what has happened so far.
     const quarterlyReturns: (number | null)[] = new Array(4).fill(null);
@@ -807,6 +837,10 @@ export function calculateReturnsTable(data: StooqDataPoint[]): ReturnsTableData 
       year,
       monthlyReturns,
       monthlyDetails,
+      monthEndPrices,
+      monthEndDates,
+      yearEndPrice,
+      yearEndDate,
       quarterlyReturns,
       quarterlyDetails,
       annualReturn,
