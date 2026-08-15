@@ -28,6 +28,8 @@ interface PriceChartProps {
   tickers: string[];
   tickersData: TickerData[];
   rawTickersData: TickerData[];
+  /** Plot cumulative % change from the first date in view instead of the price level. */
+  percentMode?: boolean;
 }
 
 const COLORS = [
@@ -115,7 +117,13 @@ function EndBubbles({
   );
 }
 
-export default function PriceChart({ data, tickers, tickersData, rawTickersData }: PriceChartProps) {
+export default function PriceChart({
+  data,
+  tickers,
+  tickersData,
+  rawTickersData,
+  percentMode = false,
+}: PriceChartProps) {
   const [show50SMA, setShow50SMA] = useState(false);
   const [show200SMA, setShow200SMA] = useState(false);
   const [distanceSMAPeriod, setDistanceSMAPeriod] = useState<50 | 200>(200);
@@ -172,6 +180,59 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
       return newPoint;
     });
   }, [data, rawPrimaryData, isSingleTicker, show50SMA, show200SMA]);
+
+  // Base value of the primary series in the visible window — the denominator for
+  // percent mode, and what the price-unit markers (extremes, current price, SMA
+  // bubbles) are re-expressed against. Undefined when it isn't a positive number,
+  // which is possible for economic series that sit at or below zero (e.g. FRED
+  // DFII10): percent change from such a base is undefined, so percent mode is
+  // suppressed rather than showing a meaningless figure.
+  const primaryBase = useMemo(() => {
+    const point = data.find((d) => typeof d[primaryTicker] === 'number');
+    const value = point ? (point[primaryTicker] as number) : undefined;
+    return value !== undefined && value > 0 ? value : undefined;
+  }, [data, primaryTicker]);
+
+  const inPercent = percentMode && primaryBase !== undefined;
+
+  /** Price level -> cumulative % change from the window's first value. */
+  const toPercent = useCallback(
+    (value: number, base: number) => (value / base) * 100 - 100,
+    []
+  );
+
+  // Re-base every series onto percent change. Applied after the SMA merge so the
+  // moving averages are converted with the *price* base they overlay, keeping
+  // their true position relative to the price line rather than being re-based
+  // onto their own first value.
+  const displayData = useMemo(() => {
+    if (!inPercent) return chartDataWithSMA;
+
+    const bases = new Map<string, number>();
+    for (const ticker of tickers) {
+      const point = chartDataWithSMA.find((d) => typeof d[ticker] === 'number');
+      const value = point ? (point[ticker] as number) : undefined;
+      if (value !== undefined && value > 0) bases.set(ticker, value);
+    }
+
+    return chartDataWithSMA.map((point) => {
+      const out: ChartDataPoint = { date: point.date };
+      for (const ticker of tickers) {
+        const value = point[ticker];
+        const base = bases.get(ticker);
+        if (typeof value === 'number' && base !== undefined) {
+          out[ticker] = toPercent(value, base);
+        }
+      }
+      for (const smaKey of ['sma50', 'sma200'] as const) {
+        const value = (point as Record<string, unknown>)[smaKey];
+        if (typeof value === 'number' && primaryBase !== undefined) {
+          out[smaKey] = toPercent(value, primaryBase);
+        }
+      }
+      return out;
+    });
+  }, [chartDataWithSMA, inPercent, tickers, primaryBase, toPercent]);
 
   // Calculate SMA distance data for the distance chart
   const smaDistanceData = useMemo(() => {
@@ -297,8 +358,30 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
     return price.toFixed(3);
   };
 
+  // Long histories produce enormous percentages (AAPL since 1980 is ~+265,000%),
+  // which don't fit an axis tick or an end bubble — abbreviate those. Tooltips
+  // pass abbreviate=false, since that's where the exact figure belongs.
+  const formatPercent = (value: number, decimals = 1, abbreviate = true) => {
+    const sign = value >= 0 ? '+' : '';
+    const abs = Math.abs(value);
+    if (abbreviate && abs >= 1000000) return `${sign}${(value / 1000000).toFixed(1)}M%`;
+    if (abbreviate && abs >= 10000) return `${sign}${(value / 1000).toFixed(1)}K%`;
+    return `${sign}${value.toFixed(decimals)}%`;
+  };
+
+  /** Re-express a price-unit value (marker, bubble, reference line) for the current mode. */
+  const toDisplayValue = (price: number) =>
+    inPercent && primaryBase !== undefined ? toPercent(price, primaryBase) : price;
+
+  /** Label for a value already in display units. */
+  const formatDisplay = (value: number) =>
+    inPercent ? formatPercent(value) : formatPrice(value);
+
   // Format large numbers for Y axis
   const formatYAxis = (value: number) => {
+    if (inPercent) {
+      return formatPercent(value, 0);
+    }
     if (value >= 1000000) {
       return `${(value / 1000000).toFixed(1)}M`;
     }
@@ -310,8 +393,13 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
 
   // Format tooltip
   const formatTooltip = (value: number, name: string) => {
-    if (name === 'sma50') return [value.toFixed(4), '50 SMA'];
-    if (name === 'sma200') return [value.toFixed(4), '200 SMA'];
+    if (name === 'sma50')
+      return [inPercent ? formatPercent(value, 2, false) : value.toFixed(4), '50 SMA'];
+    if (name === 'sma200')
+      return [inPercent ? formatPercent(value, 2, false) : value.toFixed(4), '200 SMA'];
+    if (inPercent) {
+      return [formatPercent(value, 2, false), name];
+    }
     if (isSingleTicker) {
       return [value.toFixed(4), name];
     }
@@ -331,7 +419,11 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold text-content">
-            {isSingleTicker ? `${primaryTicker} Price & Drawdown` : 'Normalized Comparison (Base = 100)'}
+            {isSingleTicker
+              ? `${primaryTicker} ${inPercent ? 'Return' : 'Price'} & Drawdown`
+              : inPercent
+              ? 'Normalized Comparison (% from start)'
+              : 'Normalized Comparison (Base = 100)'}
             {isSingleTicker && periodCagr && (
               <span className="ml-2 text-sm font-semibold text-content">
                 (Period: {periodCagr.period} | CAGR: {periodCagr.cagr})
@@ -364,14 +456,21 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
           )}
         </div>
         {!isSingleTicker && (
-          <p className="text-sm text-muted">All series normalized to 100 at common start date</p>
+          <p className="text-sm text-muted">
+            {inPercent
+              ? 'All series show cumulative % change from the common start date'
+              : 'All series normalized to 100 at common start date'}
+          </p>
+        )}
+        {isSingleTicker && inPercent && (
+          <p className="text-sm text-muted">Cumulative % change from the first date in view</p>
         )}
       </div>
 
       <div className={hasDrawdown ? "h-80" : "h-96"}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={chartDataWithSMA}
+            data={displayData}
             margin={{ top: 30, right: 55, left: 0, bottom: 0 }}
             syncId="stockChart"
           >
@@ -468,11 +567,16 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
               />
             )}
 
+            {/* Zero line — the break-even level once the series is re-based to % */}
+            {inPercent && (
+              <ReferenceLine y={0} stroke={ct.seriesPrimary} strokeWidth={1} strokeOpacity={0.5} />
+            )}
+
             {/* High point marker with label */}
             {extremes && (
               <ReferenceDot
                 x={extremes.highPoint.date}
-                y={extremes.highPoint.price}
+                y={toDisplayValue(extremes.highPoint.price)}
                 r={5}
                 fill="#16a34a"
                 stroke="white"
@@ -481,7 +585,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 <Label
                   content={
                     <PriceLabel
-                      value={formatPrice(extremes.highPoint.price)}
+                      value={formatDisplay(toDisplayValue(extremes.highPoint.price))}
                       color="#16a34a"
                       position="top"
                     />
@@ -494,7 +598,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             {extremes && (
               <ReferenceDot
                 x={extremes.lowPoint.date}
-                y={extremes.lowPoint.price}
+                y={toDisplayValue(extremes.lowPoint.price)}
                 r={5}
                 fill="#dc2626"
                 stroke="white"
@@ -503,7 +607,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
                 <Label
                   content={
                     <PriceLabel
-                      value={formatPrice(extremes.lowPoint.price)}
+                      value={formatDisplay(toDisplayValue(extremes.lowPoint.price))}
                       color="#dc2626"
                       position="bottom"
                     />
@@ -515,7 +619,7 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
             {/* Current price horizontal reference line */}
             {isSingleTicker && currentPrice && (
               <ReferenceLine
-                y={currentPrice}
+                y={toDisplayValue(currentPrice)}
                 stroke={ct.seriesPrimary}
                 strokeDasharray="4 4"
                 strokeWidth={1}
@@ -525,14 +629,18 @@ export default function PriceChart({ data, tickers, tickersData, rawTickersData 
 
             {/* End-of-chart bubbles (price + SMAs) sorted by value, highest on top */}
             {isSingleTicker && currentPrice && lastDate && (() => {
+              const bubble = (price: number, color: string) => {
+                const value = toDisplayValue(price);
+                return { value, label: formatDisplay(value), color };
+              };
               const items: { value: number; label: string; color: string }[] = [
-                { value: currentPrice, label: formatPrice(currentPrice), color: ct.markerBg },
+                bubble(currentPrice, ct.markerBg),
               ];
               if (show50SMA && lastSMA50 !== undefined) {
-                items.push({ value: lastSMA50, label: formatPrice(lastSMA50), color: '#dc2626' });
+                items.push(bubble(lastSMA50, '#dc2626'));
               }
               if (show200SMA && lastSMA200 !== undefined) {
-                items.push({ value: lastSMA200, label: formatPrice(lastSMA200), color: '#eab308' });
+                items.push(bubble(lastSMA200, '#eab308'));
               }
               items.sort((a, b) => b.value - a.value);
               const anchorValue = items[0].value;
