@@ -48,6 +48,8 @@ export default function Home() {
   // selected `source` if the user switches the toggle without reloading).
   const [dataSource, setDataSource] = useState<DataSource>('yahoo');
   const [priceBasis, setPriceBasis] = useState<PriceBasis>('close');
+  // Price level vs cumulative % change from the start of the visible window.
+  const [percentMode, setPercentMode] = useState(false);
 
   // Stooq CAPTCHA flow state
   const [stooqSession, setStooqSession] = useState<string | null>(null);
@@ -90,6 +92,18 @@ export default function Home() {
     if (filteredTickersData.length === 0) return [];
     return normalizeDataForChart(filteredTickersData);
   }, [filteredTickersData]);
+
+  // Percent mode divides by each series' first value in view, so it needs every
+  // series to start positive. Economic series can sit at or below zero (FRED
+  // DFII10, NETEXP), where a % change has no meaning — the toggle is disabled
+  // rather than plotting a nonsense line.
+  const percentAvailable = useMemo(() => {
+    if (chartData.length === 0) return false;
+    return filteredTickersData.every(({ ticker }) => {
+      const first = chartData.find((point) => typeof point[ticker] === 'number');
+      return first !== undefined && (first[ticker] as number) > 0;
+    });
+  }, [chartData, filteredTickersData]);
 
   // Calculate returns table data for focused ticker
   const returnsTableData = useMemo<YearlyData[]>(() => {
@@ -283,30 +297,66 @@ export default function Home() {
           />
         )}
 
-        {/* Price basis toggle — only when the data has adjusted close (Yahoo) */}
-        {hasData && adjCloseAvailable && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-muted">Price basis:</span>
-            <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-              {(['close', 'adjClose'] as PriceBasis[]).map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setPriceBasis(b)}
-                  disabled={isLoading}
-                  className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
-                    priceBasis === b
-                      ? 'bg-gray-700 text-white shadow-sm'
-                      : 'text-muted hover:text-content'
-                  }`}
-                >
-                  {b === 'close' ? 'Close' : 'Adj Close'}
-                </button>
-              ))}
+        {/* Chart controls. The price-basis group needs adjusted close (Yahoo only),
+            but the scale toggle applies to every source, so the row itself only
+            depends on there being data. */}
+        {hasData && (
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+            {adjCloseAvailable && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-muted">Price basis:</span>
+                <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
+                  {(['close', 'adjClose'] as PriceBasis[]).map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setPriceBasis(b)}
+                      disabled={isLoading}
+                      className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
+                        priceBasis === b
+                          ? 'bg-gray-700 text-white shadow-sm'
+                          : 'text-muted hover:text-content'
+                      }`}
+                    >
+                      {b === 'close' ? 'Close' : 'Adj Close'}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-muted">
+                  Adjusted close reflects dividends &amp; splits — recommended for returns and
+                  drawdowns.
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted">Chart scale:</span>
+              <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
+                {([false, true] as boolean[]).map((pct) => (
+                  <button
+                    key={String(pct)}
+                    type="button"
+                    onClick={() => setPercentMode(pct)}
+                    disabled={isLoading || (pct && !percentAvailable)}
+                    title={
+                      pct && !percentAvailable
+                        ? 'Needs a positive starting value — % change from zero or a negative base is undefined.'
+                        : undefined
+                    }
+                    className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      percentMode === pct
+                        ? 'bg-gray-700 text-white shadow-sm'
+                        : 'text-muted hover:text-content'
+                    }`}
+                  >
+                    {pct ? '% Return' : 'Price'}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted">
+                % Return plots cumulative change from the first date in view.
+              </span>
             </div>
-            <span className="text-xs text-muted">
-              Adjusted close reflects dividends &amp; splits — recommended for returns and drawdowns.
-            </span>
           </div>
         )}
 
@@ -342,6 +392,7 @@ export default function Home() {
               tickers={tickers}
               tickersData={filteredTickersData}
               rawTickersData={basisTickersData}
+              percentMode={percentMode && percentAvailable}
             />
           </div>
 
