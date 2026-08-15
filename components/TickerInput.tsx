@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from 'react';
 
-export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp';
+export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred';
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   stooq: 'Stooq',
@@ -10,6 +10,7 @@ const SOURCE_LABELS: Record<DataSource, string> = {
   twelvedata: 'Twelve Data',
   google: 'Google',
   nbp: 'NBP',
+  fred: 'FRED',
 };
 
 const SOURCE_INFO: Record<DataSource, string> = {
@@ -21,6 +22,8 @@ const SOURCE_INFO: Record<DataSource, string> = {
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
   google:
     'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Use Google-native symbols: exchange-prefixed like WSE:WIG20, LON:VWRA, NYSEARCA:GLD; FX/crypto as CURRENCY:USDPLN, CURRENCY:BTCUSD. Covers global stocks/ETFs/indices. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
+  fred:
+    'Federal Reserve Economic Data (St. Louis Fed) — free, no API key. Enter a FRED series ID from the series page URL (fred.stlouisfed.org/series/CPIAUCSL → CPIAUCSL). ~800k economic series with very long history: US CPI to 1947, Nasdaq Composite to 1971, Fed funds to 1954. Economic data, not market prices — one observation per period (daily, monthly or quarterly), so there is no OHLC range, no volume and no adjusted close. Note that CAGR, Growth of $1 and drawdown only make sense for level/index series like CPIAUCSL, SP500 or M2SL; for rates and percentages (DGS10, UNRATE) the chart is correct but those ratio statistics are not. FRED’s own SP500 series is licence-limited to the last 10 years — use NASDAQCOM for a long index history.',
   nbp:
     'Official National Bank of Poland reference rates — free, no API key, no CAPTCHA and no IP blocking. Table A mid rates for 32 currencies against PLN, every business day since 2002-01-02, plus the NBP gold fixing (XAUPLN = PLN per gram) since 2013-01-02. Write pairs as USDPLN; PLNUSD inverts, and any two codes cross via their PLN legs (EURUSD, XAUUSD). FX and gold only — no stocks, ETFs or indices. One fixing per day, so there is no OHLC range, no volume and no adjusted close.',
 };
@@ -83,6 +86,19 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'PLNUSD (inverse)', value: 'PLNUSD' },
     { label: 'USD vs EUR vs CHF', value: 'USDPLN,EURPLN,CHFPLN' },
   ],
+  fred: [
+    { label: 'CPIAUCSL (US CPI)', value: 'CPIAUCSL' },
+    { label: 'NASDAQCOM (since 1971)', value: 'NASDAQCOM' },
+    { label: 'SP500 (10y only)', value: 'SP500' },
+    { label: 'M2SL (money supply)', value: 'M2SL' },
+    { label: 'WALCL (Fed balance sheet)', value: 'WALCL' },
+    { label: 'DGS10 (10y yield)', value: 'DGS10' },
+    { label: 'UNRATE (unemployment)', value: 'UNRATE' },
+    { label: 'GDPC1 (real GDP)', value: 'GDPC1' },
+    { label: 'VIXCLS (VIX)', value: 'VIXCLS' },
+    { label: 'DTWEXBGS (dollar index)', value: 'DTWEXBGS' },
+    { label: 'Nasdaq vs CPI', value: 'NASDAQCOM,CPIAUCSL' },
+  ],
 };
 
 export default function TickerInput({
@@ -116,6 +132,8 @@ export default function TickerInput({
       ? 'Enter Google symbols (e.g., WSE:WIG20, NYSEARCA:GLD, CURRENCY:BTCUSD)'
       : source === 'nbp'
       ? 'Enter NBP pairs (e.g., USDPLN, EURPLN, XAUPLN, EURUSD)'
+      : source === 'fred'
+      ? 'Enter FRED series IDs (e.g., CPIAUCSL, NASDAQCOM, M2SL, DGS10)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
@@ -124,7 +142,7 @@ export default function TickerInput({
       <div className="mb-3 flex items-center gap-3">
         <span className="text-sm font-medium text-content">Data source:</span>
         <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-          {(['yahoo', 'stooq', 'twelvedata', 'google', 'nbp'] as DataSource[]).map((s) => (
+          {(['yahoo', 'stooq', 'twelvedata', 'google', 'nbp', 'fred'] as DataSource[]).map((s) => (
             <button
               key={s}
               type="button"
