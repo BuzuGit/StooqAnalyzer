@@ -354,6 +354,94 @@ export function normalizeDataForChart(tickersData: TickerData[]): ChartDataPoint
   return chartData;
 }
 
+/** One continuous stretch spent below a previous peak. */
+export interface UnderwaterPeriod {
+  /** The peak that had to be won back — the last session at the high water mark. */
+  startDate: string;
+  /** First session back at or above the peak, or the last session if still underwater. */
+  endDate: string;
+  /** Middle of the stretch, where a chart draws the duration label. */
+  midDate: string;
+  /** Calendar days from peak to recovery — the same span calculateDrawdowns() measures. */
+  days: number;
+  /** Price level the series is climbing back to. */
+  peak: number;
+  /** True when the series never recovered inside this window. */
+  ongoing: boolean;
+}
+
+/**
+ * Running high water mark: the highest close seen so far, walking left to right —
+ * a ratchet that only clicks upward. Where the price sits below it, the series is
+ * "underwater". The mark starts at the first point of whatever slice it is given,
+ * so a filtered window means "highest since the window began", not "highest ever".
+ */
+export function calculateHighWaterMark(data: StooqDataPoint[]): number[] {
+  let hwm = -Infinity;
+  return data.map((point) => {
+    if (point.close > hwm) hwm = point.close;
+    return hwm;
+  });
+}
+
+/**
+ * Groups the underwater sessions into continuous stretches so a chart can shade each
+ * one and say how long it lasted.
+ *
+ * Duration is measured peak -> recovery in calendar days, which is deliberately the
+ * span calculateDrawdowns() uses for "Longest DD": a label on the chart then always
+ * agrees with the number in the stats panel beside it. Note the shaded region itself
+ * is narrower — it covers only the sessions strictly below the mark — so the band
+ * collapses to nothing at the peak and again at recovery.
+ */
+export function findUnderwaterPeriods(data: StooqDataPoint[]): UnderwaterPeriod[] {
+  if (data.length === 0) return [];
+
+  const hwm = calculateHighWaterMark(data);
+  const periods: UnderwaterPeriod[] = [];
+  const dayCount = (from: string, to: string) =>
+    Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000);
+
+  let runStart = -1;
+  const closeRun = (startIdx: number, endIdx: number) => {
+    // The peak is the session before the run began; a run starting at index 0 has no
+    // preceding peak in this window, so the run's own first session stands in for it.
+    const peakIdx = Math.max(0, startIdx - 1);
+    const recovered = endIdx + 1 < data.length;
+    const endIdxForSpan = recovered ? endIdx + 1 : endIdx;
+    periods.push({
+      startDate: data[peakIdx].date,
+      endDate: data[endIdxForSpan].date,
+      midDate: data[Math.floor((startIdx + endIdx) / 2)].date,
+      days: dayCount(data[peakIdx].date, data[endIdxForSpan].date),
+      peak: hwm[startIdx],
+      ongoing: !recovered,
+    });
+  };
+
+  for (let i = 0; i < data.length; i++) {
+    const isUnderwater = data[i].close < hwm[i];
+    if (isUnderwater && runStart === -1) runStart = i;
+    if (!isUnderwater && runStart !== -1) {
+      closeRun(runStart, i - 1);
+      runStart = -1;
+    }
+  }
+  if (runStart !== -1) closeRun(runStart, data.length - 1);
+
+  return periods;
+}
+
+/** "2y 1m" / "9m" — the same rounding the Longest DD stat uses, so the two agree. */
+export function formatDaysAsPeriod(days: number): string {
+  const totalMonths = Math.max(1, Math.ceil(days / 30));
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+  if (years === 0) return `${months}m`;
+  if (months === 0) return `${years}y`;
+  return `${years}y ${months}m`;
+}
+
 export function findExtremes(data: StooqDataPoint[]): {
   highPoint: { date: string; price: number };
   lowPoint: { date: string; price: number };
