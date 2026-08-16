@@ -28,6 +28,12 @@ const SOURCE_INFO: Record<DataSource, string> = {
     'Official National Bank of Poland reference rates — free, no API key, no CAPTCHA and no IP blocking. Table A mid rates for 32 currencies against PLN, every business day since 2002-01-02, plus the NBP gold fixing (XAUPLN = PLN per gram) since 2013-01-02. Write pairs as USDPLN; PLNUSD inverts, and any two codes cross via their PLN legs (EURUSD, XAUUSD). FX and gold only — no stocks, ETFs or indices. One fixing per day, so there is no OHLC range, no volume and no adjusted close.',
 };
 
+/** Optional footnote under the example chips, where a pair of them needs disambiguating. */
+const SOURCE_NOTES: Partial<Record<DataSource, string>> = {
+  fred:
+    'CPIAUCSL vs CPIAUCNS — the same BLS index: seasonally adjusted (smooths monthly noise, best for month-to-month moves, starts 1947) vs not adjusted (matches the BLS headline tables, starts 1913). Annual averages and YoY inflation are near-identical either way.',
+};
+
 interface TickerInputProps {
   onSubmit: (tickers: string[], source: DataSource) => void;
   isLoading: boolean;
@@ -87,7 +93,8 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'USD vs EUR vs CHF', value: 'USDPLN,EURPLN,CHFPLN' },
   ],
   fred: [
-    { label: 'CPIAUCSL (US CPI)', value: 'CPIAUCSL' },
+    { label: 'CPIAUCSL (US CPI, seas. adj.)', value: 'CPIAUCSL' },
+    { label: 'CPIAUCNS (US CPI, not adj.)', value: 'CPIAUCNS' },
     { label: 'NASDAQCOM (since 1971)', value: 'NASDAQCOM' },
     { label: 'SP500 (10y only)', value: 'SP500' },
     { label: 'M2SL (money supply)', value: 'M2SL' },
@@ -218,6 +225,9 @@ export default function TickerInput({
           </button>
         ))}
       </div>
+      {SOURCE_NOTES[source] && (
+        <p className="mt-2 text-xs text-subtle">{SOURCE_NOTES[source]}</p>
+      )}
     </div>
   );
 }
