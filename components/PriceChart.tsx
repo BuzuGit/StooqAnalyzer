@@ -16,21 +16,43 @@ import {
   Label,
 } from 'recharts';
 import { ChartDataPoint, TickerData } from '@/lib/types';
-import { findExtremes, calculateDrawdownSeries, calculateSMA, calculateSMADistance } from '@/lib/statistics';
+import {
+  findExtremes,
+  calculateDrawdownSeries,
+  calculateSMA,
+  calculateSMADistance,
+  calculateHighWaterMark,
+  findUnderwaterPeriods,
+  formatDaysAsPeriod,
+} from '@/lib/statistics';
 import { useTheme } from '@/components/ThemeProvider';
 import { getChartTheme } from '@/lib/chartTheme';
 import DrawdownChart from './DrawdownChart';
 import SMADistanceChart from './SMADistanceChart';
 import DateAxisTick, { computeEvenTicks } from './DateAxisTick';
 
+/**
+ * What the price chart plots:
+ *  'price'    — the price level
+ *  'percent'  — cumulative % change from the first date in view
+ *  'drawdown' — price plus its high water mark, with the underwater stretches shaded
+ */
+export type ChartView = 'price' | 'percent' | 'drawdown';
+
 interface PriceChartProps {
   data: ChartDataPoint[];
   tickers: string[];
   tickersData: TickerData[];
   rawTickersData: TickerData[];
-  /** Plot cumulative % change from the first date in view instead of the price level. */
-  percentMode?: boolean;
+  view?: ChartView;
 }
+
+/** Borrowed from PortfolioBacktester's palette so the two apps' drawdown charts match. */
+const HWM_COLOR = '#c06a94'; // dusty rose
+const HWM_LABEL_COLOR = '#8a3f52'; // deep wine
+
+/** Underwater stretches shorter than this go unlabelled — a two-month dip isn't a story. */
+const LABEL_MIN_DAYS = 365;
 
 const COLORS = [
   '#000000', // black (primary asset)
@@ -122,8 +144,9 @@ export default function PriceChart({
   tickers,
   tickersData,
   rawTickersData,
-  percentMode = false,
+  view = 'price',
 }: PriceChartProps) {
+  const percentMode = view === 'percent';
   const [show50SMA, setShow50SMA] = useState(false);
   const [show200SMA, setShow200SMA] = useState(false);
   const [distanceSMAPeriod, setDistanceSMAPeriod] = useState<50 | 200>(200);
@@ -233,6 +256,40 @@ export default function PriceChart({
       return out;
     });
   }, [chartDataWithSMA, inPercent, tickers, primaryBase, toPercent]);
+
+  // --- Drawdown ("underwater") view ---
+  // Only meaningful for a single asset: the normalized multi-asset chart has no one
+  // price level for a high water mark to ratchet against.
+  const drawdownView = view === 'drawdown' && isSingleTicker && primaryData.length > 0;
+
+  // Recharts shades between two lines when a point carries a [low, high] pair, so we
+  // hand it [price, high water mark]. At a new high the pair collapses to zero height
+  // and nothing is drawn — exactly right, since there is no drawdown to shade there.
+  const drawdownData = useMemo(() => {
+    if (!drawdownView) return null;
+    const hwm = calculateHighWaterMark(primaryData);
+    const hwmByDate = new Map(primaryData.map((point, i) => [point.date, hwm[i]]));
+    return chartDataWithSMA.map((point) => {
+      const price = point[primaryTicker];
+      const mark = hwmByDate.get(point.date);
+      if (typeof price !== 'number' || mark === undefined) return point;
+      return { ...point, hwm: mark, underwaterBand: [price, mark] as [number, number] };
+    });
+  }, [drawdownView, primaryData, chartDataWithSMA, primaryTicker]);
+
+  const underwaterPeriods = useMemo(
+    () =>
+      drawdownView
+        ? findUnderwaterPeriods(primaryData).filter((p) => p.days >= LABEL_MIN_DAYS)
+        : [],
+    [drawdownView, primaryData]
+  );
+
+  const lastHwm = useMemo(() => {
+    if (!drawdownView) return undefined;
+    const hwm = calculateHighWaterMark(primaryData);
+    return hwm[hwm.length - 1];
+  }, [drawdownView, primaryData]);
 
   // Calculate SMA distance data for the distance chart
   const smaDistanceData = useMemo(() => {
@@ -392,7 +449,15 @@ export default function PriceChart({
   };
 
   // Format tooltip
-  const formatTooltip = (value: number, name: string) => {
+  const formatTooltip = (value: number | [number, number], name: string) => {
+    // The underwater band carries a [price, peak] pair rather than a single value —
+    // report the gap between them, which is what the shading actually depicts.
+    if (Array.isArray(value)) {
+      const [price, peak] = value;
+      const gap = peak > 0 ? (price / peak - 1) * 100 : 0;
+      return [`${gap.toFixed(2)}% below peak`, 'Drawdown'];
+    }
+    if (name === 'hwm') return [formatPrice(value), 'High water mark'];
     if (name === 'sma50')
       return [inPercent ? formatPercent(value, 2, false) : value.toFixed(4), '50 SMA'];
     if (name === 'sma200')
@@ -465,12 +530,18 @@ export default function PriceChart({
         {isSingleTicker && inPercent && (
           <p className="text-sm text-muted">Cumulative % change from the first date in view</p>
         )}
+        {drawdownView && (
+          <p className="text-sm text-muted">
+            Shaded area is the gap below the high water mark; labels give the duration of
+            each stretch underwater lasting a year or more.
+          </p>
+        )}
       </div>
 
       <div className={hasDrawdown ? "h-80" : "h-96"}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={displayData}
+            data={drawdownData ?? displayData}
             margin={{ top: 30, right: 55, left: 0, bottom: 0 }}
             syncId="stockChart"
           >
@@ -524,7 +595,23 @@ export default function PriceChart({
               labelFormatter={(date) => new Date(date).toLocaleDateString()}
               formatter={formatTooltip}
             />
-            {tickers.length > 1 && <Legend />}
+            {(tickers.length > 1 || drawdownView) && <Legend />}
+
+            {/* Shading between price and its high water mark — the gap still to be
+                climbed back. Drawn before the lines so they sit on top of it. */}
+            {drawdownView && (
+              <Area
+                type="monotone"
+                dataKey="underwaterBand"
+                name="Below peak"
+                stroke="none"
+                fill={HWM_COLOR}
+                fillOpacity={0.28}
+                activeDot={false}
+                legendType="none"
+                isAnimationActive={false}
+              />
+            )}
 
             {tickers.map((ticker, index) => (
               <Area
@@ -532,10 +619,48 @@ export default function PriceChart({
                 type="monotone"
                 dataKey={ticker}
                 stroke={colorFor(index)}
-                fill={`url(#gradient-${ticker})`}
+                // The gradient would muddy the pink shading, so the price is a bare
+                // line in the drawdown view.
+                fill={drawdownView ? 'none' : `url(#gradient-${ticker})`}
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
+              />
+            ))}
+
+            {/* High water mark — the ratchet of previous peaks, flat until a new high */}
+            {drawdownView && (
+              <Line
+                type="monotone"
+                dataKey="hwm"
+                name="High water mark"
+                stroke={HWM_COLOR}
+                strokeWidth={2}
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* "2y 1m" over the middle of each underwater stretch of a year or more.
+                The dot is invisible (r=0) and exists only to anchor the text at the
+                peak level, just above the shaded area. */}
+            {underwaterPeriods.map((period) => (
+              <ReferenceDot
+                key={`underwater-${period.startDate}`}
+                x={period.midDate}
+                y={period.peak}
+                r={0}
+                fill="none"
+                stroke="none"
+                label={{
+                  value: formatDaysAsPeriod(period.days),
+                  position: 'top',
+                  fontSize: 11,
+                  fill: HWM_LABEL_COLOR,
+                  fontWeight: 600,
+                }}
               />
             ))}
 
@@ -641,6 +766,9 @@ export default function PriceChart({
               }
               if (show200SMA && lastSMA200 !== undefined) {
                 items.push(bubble(lastSMA200, '#eab308'));
+              }
+              if (drawdownView && lastHwm !== undefined) {
+                items.push(bubble(lastHwm, HWM_COLOR));
               }
               items.sort((a, b) => b.value - a.value);
               const anchorValue = items[0].value;

@@ -5,7 +5,7 @@ import TickerInput, { DataSource } from '@/components/TickerInput';
 import CaptchaModal from '@/components/CaptchaModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { PriceBasis, tickersWithBasis, hasAdjClose } from '@/lib/priceBasis';
-import PriceChart from '@/components/PriceChart';
+import PriceChart, { ChartView } from '@/components/PriceChart';
 import StatsPanel from '@/components/StatsPanel';
 import DateRangeFilter from '@/components/DateRangeFilter';
 import TrendFollowingSection from '@/components/TrendFollowingSection';
@@ -48,8 +48,9 @@ export default function Home() {
   // selected `source` if the user switches the toggle without reloading).
   const [dataSource, setDataSource] = useState<DataSource>('yahoo');
   const [priceBasis, setPriceBasis] = useState<PriceBasis>('close');
-  // Price level vs cumulative % change from the start of the visible window.
-  const [percentMode, setPercentMode] = useState(false);
+  // Price level, cumulative % change from the start of the window, or price with its
+  // high water mark and underwater stretches shaded.
+  const [chartView, setChartView] = useState<ChartView>('price');
 
   // Stooq CAPTCHA flow state
   const [stooqSession, setStooqSession] = useState<string | null>(null);
@@ -240,6 +241,16 @@ export default function Home() {
 
   const tickers = filteredTickersData.map((td) => td.ticker);
   const hasData = rawTickersData.length > 0;
+  const isSingleTicker = tickers.length === 1;
+
+  // A selected view can stop being valid without the user touching it — loading a
+  // second ticker rules out the drawdown view, a new source can start at zero. Fall
+  // back to price rather than rendering a chart the data can't support.
+  const effectiveChartView: ChartView =
+    (chartView === 'percent' && !percentAvailable) ||
+    (chartView === 'drawdown' && !isSingleTicker)
+      ? 'price'
+      : chartView;
 
   // Focused asset for detail sections (used in both single and multi-ticker modes)
   const focusedIdx = Math.min(focusedTickerIndex, Math.max(tickers.length - 1, 0));
@@ -330,31 +341,47 @@ export default function Home() {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted">Chart scale:</span>
+              <span className="text-sm font-medium text-muted">Chart view:</span>
               <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-                {([false, true] as boolean[]).map((pct) => (
+                {(
+                  [
+                    { key: 'price', label: 'Price', disabled: false, why: undefined },
+                    {
+                      key: 'percent',
+                      label: '% Return',
+                      disabled: !percentAvailable,
+                      why: 'Needs a positive starting value — % change from zero or a negative base is undefined.',
+                    },
+                    {
+                      key: 'drawdown',
+                      label: 'Price & drawdowns',
+                      disabled: !isSingleTicker,
+                      why: 'Single asset only — a normalized multi-asset chart has no one price level to track peaks against.',
+                    },
+                  ] as { key: ChartView; label: string; disabled: boolean; why?: string }[]
+                ).map((opt) => (
                   <button
-                    key={String(pct)}
+                    key={opt.key}
                     type="button"
-                    onClick={() => setPercentMode(pct)}
-                    disabled={isLoading || (pct && !percentAvailable)}
-                    title={
-                      pct && !percentAvailable
-                        ? 'Needs a positive starting value — % change from zero or a negative base is undefined.'
-                        : undefined
-                    }
+                    onClick={() => setChartView(opt.key)}
+                    disabled={isLoading || opt.disabled}
+                    title={opt.disabled ? opt.why : undefined}
+                    // Highlight follows the view actually on screen, not the stored
+                    // selection — otherwise a fallback leaves a disabled button lit up
+                    // while the chart shows something else.
                     className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                      percentMode === pct
+                      effectiveChartView === opt.key
                         ? 'bg-gray-700 text-white shadow-sm'
                         : 'text-muted hover:text-content'
                     }`}
                   >
-                    {pct ? '% Return' : 'Price'}
+                    {opt.label}
                   </button>
                 ))}
               </div>
               <span className="text-xs text-muted">
-                % Return plots cumulative change from the first date in view.
+                % Return plots cumulative change from the first date in view; Price &amp;
+                drawdowns shades every stretch spent below a previous peak.
               </span>
             </div>
           </div>
@@ -392,7 +419,7 @@ export default function Home() {
               tickers={tickers}
               tickersData={filteredTickersData}
               rawTickersData={basisTickersData}
-              percentMode={percentMode && percentAvailable}
+              view={effectiveChartView}
             />
           </div>
 
