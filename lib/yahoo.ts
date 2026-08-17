@@ -1,4 +1,5 @@
 import { StooqDataPoint } from './types';
+import { fetchWithTimeout } from './http';
 
 const YAHOO_CHART_PATH = '/v8/finance/chart/';
 const YAHOO_SEARCH_PATH = '/v1/finance/search';
@@ -30,16 +31,18 @@ function setCookieHeader(res: Response): string {
 async function fetchCrumb(): Promise<{ cookie: string; crumb: string } | null> {
   if (crumbCache) return crumbCache;
   try {
-    const r1 = await fetch('https://fc.yahoo.com/', {
-      cache: 'no-store',
-      headers: { 'User-Agent': UA },
-    });
+    const r1 = await fetchWithTimeout(
+      'https://fc.yahoo.com/',
+      { cache: 'no-store', headers: { 'User-Agent': UA } },
+      'Yahoo'
+    );
     const cookie = setCookieHeader(r1);
     if (!cookie) return null;
-    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
-      cache: 'no-store',
-      headers: { 'User-Agent': UA, Cookie: cookie },
-    });
+    const r2 = await fetchWithTimeout(
+      'https://query1.finance.yahoo.com/v1/test/getcrumb',
+      { cache: 'no-store', headers: { 'User-Agent': UA, Cookie: cookie } },
+      'Yahoo'
+    );
     if (!r2.ok) return null;
     const crumb = (await r2.text()).trim();
     if (!crumb || crumb.length > 40 || crumb.includes('<')) return null;
@@ -61,18 +64,25 @@ async function yahooApiFetch(pathWithQuery: string): Promise<Response | null> {
   for (const host of YAHOO_HOSTS) {
     const base = `https://${host}${pathWithQuery}`;
     try {
-      let res = await fetch(base, {
-        cache: 'no-store',
-        headers: { 'User-Agent': UA, ...(crumbCache ? { Cookie: crumbCache.cookie } : {}) },
-      });
+      // A timeout throws, which the catch below treats exactly like a network
+      // error: fall through and try the other Yahoo host.
+      let res = await fetchWithTimeout(
+        base,
+        {
+          cache: 'no-store',
+          headers: { 'User-Agent': UA, ...(crumbCache ? { Cookie: crumbCache.cookie } : {}) },
+        },
+        'Yahoo'
+      );
       if (res.status === 401 || res.status === 403) {
         const cr = await fetchCrumb();
         if (cr) {
           const sep = pathWithQuery.includes('?') ? '&' : '?';
-          res = await fetch(`${base}${sep}crumb=${encodeURIComponent(cr.crumb)}`, {
-            cache: 'no-store',
-            headers: { 'User-Agent': UA, Cookie: cr.cookie },
-          });
+          res = await fetchWithTimeout(
+            `${base}${sep}crumb=${encodeURIComponent(cr.crumb)}`,
+            { cache: 'no-store', headers: { 'User-Agent': UA, Cookie: cr.cookie } },
+            'Yahoo'
+          );
         }
       }
       if (res.ok || res.status === 404) return res;

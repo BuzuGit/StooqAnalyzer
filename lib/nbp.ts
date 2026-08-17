@@ -1,6 +1,20 @@
 import { StooqDataPoint } from './types';
+import { fetchWithTimeout } from './http';
 
 const NBP_BASE = 'https://api.nbp.pl/api';
+
+/**
+ * A calendar year that has finished can never gain or change a rate, so its window
+ * is cached hard — a month, which is effectively forever for a closed year while
+ * still self-healing if NBP ever restates one. Only the current year's window is
+ * refetched often, and even then not on every click: NBP publishes one fixing per
+ * business day, so a quarter of an hour is well inside its update cadence.
+ *
+ * This is the difference between an Analyze costing 25 upstream calls every time
+ * and costing them once.
+ */
+const CLOSED_WINDOW_TTL_SECONDS = 30 * 24 * 60 * 60;
+const CURRENT_WINDOW_TTL_SECONDS = 15 * 60;
 
 /** Table A (average rates) is published back to this date; the gold fixing starts later. */
 const TABLE_A_START = '2002-01-02';
@@ -134,13 +148,25 @@ type GoldResponse = Array<{ data: string; cena: number }>;
 async function fetchSeries(code: string): Promise<Map<string, number>> {
   const isGold = code === 'XAU';
   const windows = yearWindows(isGold ? GOLD_START : TABLE_A_START);
+  const today = warsawToday();
 
   const chunks = await mapLimit(windows, MAX_PARALLEL_CHUNKS, async ([from, to]) => {
     const url = isGold
       ? `${NBP_BASE}/cenyzlota/${from}/${to}/?format=json`
       : `${NBP_BASE}/exchangerates/rates/a/${code.toLowerCase()}/${from}/${to}/?format=json`;
 
-    const res = await fetch(url, { cache: 'no-store' });
+    // Only the final window reaches today; every earlier one ends on a 31 December
+    // that has already passed and is therefore settled history.
+    const isClosed = to < today;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        next: {
+          revalidate: isClosed ? CLOSED_WINDOW_TTL_SECONDS : CURRENT_WINDOW_TTL_SECONDS,
+        },
+      },
+      'NBP'
+    );
     if (res.status === 404) return [] as Array<[string, number]>;
     if (!res.ok) {
       throw new Error(`NBP request failed for ${code} (${from}..${to}): ${res.status}`);
