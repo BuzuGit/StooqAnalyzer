@@ -448,8 +448,10 @@ export default function Home() {
 
         {/* Chart and Stats Layout */}
         <div className="flex flex-col lg:flex-row gap-4">
-          {/* Chart Section - 80% on large screens */}
-          <div className="flex-1 lg:w-4/5">
+          {/* Chart Section — the chart is the point of the page, so it absorbs all
+              the slack. A fraction here would hand a wide monitor's extra pixels to
+              the stats column instead; a fixed stats width gives them to the chart. */}
+          <div className="flex-1 min-w-0">
             <PriceChart
               data={chartData}
               tickers={tickers}
@@ -460,8 +462,10 @@ export default function Home() {
             />
           </div>
 
-          {/* Stats Panel - 20% on large screens */}
-          <div className="lg:w-1/5 min-w-[280px]">
+          {/* Stats Panel — fixed at the narrowest width its longest label fits in
+              (measured: nothing wraps at 196px, so 210 leaves headroom for wider
+              values). Fixed rather than a fraction so it never grows with the screen. */}
+          <div className="lg:w-[210px] lg:flex-shrink-0">
             <StatsPanel statistics={statistics} isLoading={isLoading} />
           </div>
         </div>

@@ -59,17 +59,23 @@ interface StatRowProps {
   value: string | number;
   isNegative?: boolean;
   isPositive?: boolean;
+  /** When the figure belongs to a period, that period sits under it in small type
+      rather than widening the value column. */
+  note?: string;
 }
 
-function StatRow({ label, value, isNegative, isPositive }: StatRowProps) {
+function StatRow({ label, value, isNegative, isPositive, note }: StatRowProps) {
   let valueColor = 'text-content';
   if (isNegative) valueColor = 'text-red-600';
   if (isPositive) valueColor = 'text-green-600';
 
   return (
-    <div className="flex justify-between items-center py-1 text-sm">
+    <div className="flex justify-between items-start gap-2 py-1 text-sm">
       <span className="text-muted">{label}</span>
-      <span className={`font-medium ${valueColor}`}>{value}</span>
+      <span className="text-right leading-tight">
+        <span className={`font-medium ${valueColor}`}>{value}</span>
+        {note && <span className="block text-[10px] text-subtle">{note}</span>}
+      </span>
     </div>
   );
 }
@@ -173,7 +179,8 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
             {stats.bestYear !== null && (
               <StatRow
                 label="Best Year"
-                value={`${formatPercent(stats.bestYear.value)} (${stats.bestYear.label})`}
+                value={formatPercent(stats.bestYear.value)}
+                note={stats.bestYear.label}
                 isPositive={stats.bestYear.value > 0}
                 isNegative={stats.bestYear.value < 0}
               />
@@ -181,7 +188,8 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
             {stats.worstYear !== null && (
               <StatRow
                 label="Worst Year"
-                value={`${formatPercent(stats.worstYear.value)} (${stats.worstYear.label})`}
+                value={formatPercent(stats.worstYear.value)}
+                note={stats.worstYear.label}
                 isPositive={stats.worstYear.value > 0}
                 isNegative={stats.worstYear.value < 0}
               />
@@ -189,7 +197,8 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
             {stats.bestMonth !== null && (
               <StatRow
                 label="Best Month"
-                value={`${formatPercent(stats.bestMonth.value)} (${stats.bestMonth.label})`}
+                value={formatPercent(stats.bestMonth.value)}
+                note={stats.bestMonth.label}
                 isPositive={stats.bestMonth.value > 0}
                 isNegative={stats.bestMonth.value < 0}
               />
@@ -197,7 +206,8 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
             {stats.worstMonth !== null && (
               <StatRow
                 label="Worst Month"
-                value={`${formatPercent(stats.worstMonth.value)} (${stats.worstMonth.label})`}
+                value={formatPercent(stats.worstMonth.value)}
+                note={stats.worstMonth.label}
                 isPositive={stats.worstMonth.value > 0}
                 isNegative={stats.worstMonth.value < 0}
               />
@@ -212,18 +222,20 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
 
           {/* DRAWDOWNS Section */}
           <CollapsibleSection title="DRAWDOWNS">
+            {/* Abbreviated to match the existing "Longest DD" and to keep the column
+                narrow — these three were the widest labels in the panel. */}
             <StatRow
-              label="Max Drawdown"
+              label="Max DD"
               value={`-${formatNumber(stats.maxDrawdown)}%`}
               isNegative
             />
             <StatRow
-              label="Current Drawdown"
+              label="Current DD"
               value={stats.currentDrawdown > 0 ? `-${formatNumber(stats.currentDrawdown)}%` : '0.00%'}
               isNegative={stats.currentDrawdown > 0}
             />
             <StatRow
-              label="To Return to ATH"
+              label="To ATH"
               value={stats.toReturnToATH > 0 ? `+${formatNumber(stats.toReturnToATH)}%` : '0.00%'}
             />
             <StatRow label="Longest DD" value={formatDaysToYearsMonths(stats.longestDrawdownDays)} />

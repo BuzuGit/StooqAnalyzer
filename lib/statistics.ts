@@ -335,7 +335,9 @@ function calculatePeriodReturns(data: StooqDataPoint[]): {
     // or one following a gap in the data.
     if (priorPrice === undefined || !(priorPrice > 0)) continue;
     const value = (price / priorPrice - 1) * 100;
-    const label = `${MONTH_ABBR[month]} ${year}`;
+    // Compact two-digit year ("Oct '08") — this sits in a narrow stats column, and
+    // the century is never in doubt for a price series.
+    const label = `${MONTH_ABBR[month]} '${String(year).slice(-2)}`;
     if (bestMonth === null || value > bestMonth.value) bestMonth = { label, value };
     if (worstMonth === null || value < worstMonth.value) worstMonth = { label, value };
   }
