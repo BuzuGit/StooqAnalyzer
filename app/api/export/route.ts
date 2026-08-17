@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import { TickerData, StooqDataPoint } from '@/lib/types';
-import { buildDailyRows, buildPeriodicRows, ExportRow } from '@/lib/exportData';
+import { TickerData, StooqDataPoint, Statistics } from '@/lib/types';
+import {
+  buildDailyRows,
+  buildPeriodicRows,
+  buildStatsRows,
+  ExportRow,
+  StatExportRow,
+} from '@/lib/exportData';
 
 export const runtime = 'nodejs';
 
@@ -43,8 +49,49 @@ function addSheet(workbook: ExcelJS.Workbook, name: string, rows: ExportRow[]): 
   }
 }
 
+/** Statistics tab: Metric | Value | Detail, with a bold heading before each section. */
+function addStatsSheet(
+  workbook: ExcelJS.Workbook,
+  name: string,
+  rows: StatExportRow[]
+): void {
+  const sheet = workbook.addWorksheet(sanitizeSheetName(name));
+  sheet.columns = [
+    { header: 'Metric', key: 'label', width: 20 },
+    { header: 'Value', key: 'value', width: 16 },
+    { header: 'Detail', key: 'detail', width: 14 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  let currentSection = '';
+  for (const row of rows) {
+    if (row.section !== currentSection) {
+      currentSection = row.section;
+      const heading = sheet.addRow({ label: currentSection });
+      heading.font = { bold: true };
+    }
+    const added = sheet.addRow({
+      label: row.label,
+      value: row.value,
+      detail: row.detail ?? null,
+    });
+    // Formats go on the cell, not the column — the Value column mixes percentages,
+    // prices, plain numbers and text.
+    const valueCell = added.getCell('value');
+    if (row.kind === 'percent') valueCell.numFmt = PCT_FMT;
+    else if (row.kind === 'price') valueCell.numFmt = PRICE_FMT;
+    else if (row.kind === 'integer') valueCell.numFmt = VOLUME_FMT;
+    else if (row.kind === 'number') valueCell.numFmt = '#,##0.00';
+  }
+}
+
 export async function POST(request: NextRequest) {
-  let body: { tickers?: TickerData[] };
+  let body: {
+    tickers?: TickerData[];
+    statistics?: Statistics[];
+    priceBasis?: 'close' | 'adjClose';
+  };
   try {
     body = await request.json();
   } catch {
@@ -57,10 +104,22 @@ export async function POST(request: NextRequest) {
   }
 
   const workbook = new ExcelJS.Workbook();
+  const priceBasis = body.priceBasis === 'adjClose' ? 'adjClose' : 'close';
+  // Keyed by ticker so a stats entry lands on its own ticker's sheet regardless of
+  // the order the two arrays arrive in.
+  const statsByTicker = new Map<string, Statistics>();
+  for (const s of body.statistics ?? []) {
+    if (s?.ticker) statsByTicker.set(s.ticker, s);
+  }
 
   for (const td of tickers) {
     if (!td?.ticker || !Array.isArray(td.data) || td.data.length === 0) continue;
     const data = td.data as StooqDataPoint[];
+    // Summary first, then the underlying series.
+    const stats = statsByTicker.get(td.ticker);
+    if (stats) {
+      addStatsSheet(workbook, `${td.ticker}_stats`, buildStatsRows(stats, { priceBasis }));
+    }
     addSheet(workbook, `${td.ticker}_data`, buildDailyRows(data));
     addSheet(workbook, `${td.ticker}_monthly`, buildPeriodicRows(data, 'month'));
     addSheet(workbook, `${td.ticker}_yearly`, buildPeriodicRows(data, 'year'));

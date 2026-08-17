@@ -205,7 +205,10 @@ export default function Home() {
       const response = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers: rawTickersData }),
+        // The data tabs hold the full sourced history, but the statistics tab mirrors
+        // what's on screen — so the panel's own figures go along with the request
+        // rather than being recomputed server-side on a different slice.
+        body: JSON.stringify({ tickers: rawTickersData, statistics, priceBasis }),
       });
       if (!response.ok) {
         const msg = await response.json().catch(() => ({}));
@@ -239,7 +242,7 @@ export default function Home() {
     } finally {
       setIsDownloading(false);
     }
-  }, [rawTickersData, dataSource]);
+  }, [rawTickersData, dataSource, statistics, priceBasis]);
 
   const tickers = filteredTickersData.map((td) => td.ticker);
   const hasData = rawTickersData.length > 0;
