@@ -1,4 +1,5 @@
 import { StooqDataPoint } from './types';
+import { fetchWithTimeout } from './http';
 
 const TD_BASE = 'https://api.twelvedata.com';
 
@@ -70,7 +71,7 @@ interface TwelveDataResponse {
 
 async function tdGet<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${TD_BASE}${path}`, { cache: 'no-store' });
+    const res = await fetchWithTimeout(`${TD_BASE}${path}`, { cache: 'no-store' }, 'Twelve Data');
     return (await res.json()) as T;
   } catch {
     return null;

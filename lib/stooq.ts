@@ -10,6 +10,7 @@ import {
   storeSetCookies,
   StooqSession,
 } from './stooqSession';
+import { fetchWithTimeout } from './http';
 
 const STOOQ_ORIGIN = 'https://stooq.pl';
 const STOOQ_BASE_URL = `${STOOQ_ORIGIN}/q/d/l/`;
@@ -75,7 +76,7 @@ function solveProofOfWork(challenge: string, difficulty: number): number {
 
 function stooqFetch(url: string, session: StooqSession, init?: RequestInit) {
   const cookie = serializeCookies(session);
-  return fetch(url, {
+  return fetchWithTimeout(url, {
     ...init,
     // Never let Next.js cache these — a cached response replays no fresh
     // Set-Cookie headers, which silently drops the per-visit session cookies

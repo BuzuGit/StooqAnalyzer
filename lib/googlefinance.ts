@@ -1,4 +1,5 @@
 import { StooqDataPoint } from './types';
+import { fetchWithTimeout } from './http';
 
 /** Raised when the Google Finance (Apps Script) endpoint isn't configured. */
 export class GoogleFinanceConfigError extends Error {
@@ -53,7 +54,11 @@ export async function fetchGoogleFinance(ticker: string): Promise<StooqDataPoint
   const symbol = toGoogleSymbol(ticker);
   const url = `${base}${base.includes('?') ? '&' : '?'}ticker=${encodeURIComponent(symbol)}`;
 
-  const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+  const res = await fetchWithTimeout(
+    url,
+    { cache: 'no-store', redirect: 'follow' },
+    'The Google Finance proxy'
+  );
   if (res.status === 401 || res.status === 403) {
     throw new GoogleFinanceConfigError(
       'Google Finance web app is not public (got ' +

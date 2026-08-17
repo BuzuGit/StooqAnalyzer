@@ -1,4 +1,5 @@
 import { StooqDataPoint } from './types';
+import { fetchWithTimeout } from './http';
 
 /**
  * The CSV behind FRED's "Download" button. Public and keyless — unlike
@@ -45,7 +46,11 @@ export function toFredSeriesId(ticker: string): string {
 export async function fetchFredData(ticker: string): Promise<StooqDataPoint[]> {
   const id = toFredSeriesId(ticker);
 
-  const res = await fetch(`${FRED_CSV}?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+  const res = await fetchWithTimeout(
+    `${FRED_CSV}?id=${encodeURIComponent(id)}`,
+    { cache: 'no-store' },
+    'FRED'
+  );
   if (res.status === 404) {
     throw new FredSeriesError(
       `FRED has no series "${id}". Check the ID on fred.stlouisfed.org — it is the ` +
