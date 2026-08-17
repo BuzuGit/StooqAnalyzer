@@ -1,20 +1,11 @@
 'use client';
 
 import { YearlyData } from '@/lib/statistics';
+import { MONTH_NAMES as MONTHS, formatPrice } from '@/lib/format';
 
 interface MonthEndPriceTableProps {
   data: YearlyData[];
   ticker: string;
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** Same significant-figure treatment the returns table's tooltips use, so prices match across tables. */
-function formatPrice(price: number | null): string {
-  if (price === null) return '';
-  if (price >= 1000) return price.toFixed(2);
-  if (price >= 100) return price.toFixed(3);
-  return price.toFixed(4);
 }
 
 /** Change vs the previous month-end, used only to tint the cell. */

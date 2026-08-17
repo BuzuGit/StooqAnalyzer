@@ -12,6 +12,7 @@ import {
   RollingReturnDataPoint,
   PeriodExtreme,
 } from './types';
+import { MONTH_NAMES as MONTH_ABBR } from './format';
 
 const RISK_FREE_RATE = 0.02; // 2% annual risk-free rate assumption
 const TRADING_DAYS_PER_YEAR = 252;
@@ -233,11 +234,6 @@ function calculateAnnualizedStd(dailyReturns: number[]): number {
 
   return dailyStd * Math.sqrt(TRADING_DAYS_PER_YEAR);
 }
-
-const MONTH_ABBR = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
 
 function calculatePeriodReturns(data: StooqDataPoint[]): {
   ytdReturn: number | null;

@@ -1,6 +1,9 @@
 'use client';
 
-export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+import { MONTH_NAMES } from '@/lib/format';
+
+/** Re-exported under its established name so existing importers stay unchanged. */
+export const MONTHS = MONTH_NAMES;
 
 interface DateAxisTickProps {
   x?: number;

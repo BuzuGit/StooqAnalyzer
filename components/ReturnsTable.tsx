@@ -1,13 +1,12 @@
 'use client';
 
 import { YearlyData, ReturnCalcDetail } from '@/lib/statistics';
+import { MONTH_NAMES as MONTHS, formatPrice as formatPriceRaw } from '@/lib/format';
 
 interface ReturnsTableProps {
   data: YearlyData[];
   ticker: string;
 }
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const QUARTERS = ['1Q', '2Q', '3Q', '4Q'];
 
 /** Mean of the values actually present, ignoring years that have no figure. */
@@ -48,12 +47,8 @@ function formatStd(value: number | null): string {
   return `${value.toFixed(1)}%`;
 }
 
-function formatPrice(price: number | null): string {
-  if (price === null) return '-';
-  if (price >= 1000) return price.toFixed(2);
-  if (price >= 100) return price.toFixed(3);
-  return price.toFixed(4);
-}
+/** This table shows a dash for a missing price rather than an empty cell. */
+const formatPrice = (price: number | null): string => formatPriceRaw(price, '-');
 
 function formatDate(date: string | null): string {
   if (!date) return '-';
