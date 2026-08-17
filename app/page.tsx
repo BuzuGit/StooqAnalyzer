@@ -51,6 +51,8 @@ export default function Home() {
   // Price level, cumulative % change from the start of the window, or price with its
   // high water mark and underwater stretches shaded.
   const [chartView, setChartView] = useState<ChartView>('price');
+  // Linear (default) or logarithmic Y axis on the price chart.
+  const [logScale, setLogScale] = useState(false);
 
   // Stooq CAPTCHA flow state
   const [stooqSession, setStooqSession] = useState<string | null>(null);
@@ -252,6 +254,10 @@ export default function Home() {
       ? 'price'
       : chartView;
 
+  // % Return crosses zero, which a log axis cannot plot, so the selection is ignored
+  // there rather than silently clipping the negative half of the series.
+  const effectiveLogScale = logScale && effectiveChartView !== 'percent';
+
   // Focused asset for detail sections (used in both single and multi-ticker modes)
   const focusedIdx = Math.min(focusedTickerIndex, Math.max(tickers.length - 1, 0));
   const focusedTicker = tickers[focusedIdx] || '';
@@ -379,9 +385,39 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              {/* Axis scale, kept as its own group because it applies to the views
+                  above rather than being a fourth view of its own. */}
+              <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2 ml-1">
+                {(
+                  [
+                    { key: false, label: 'Linear' },
+                    { key: true, label: 'Log' },
+                  ] as { key: boolean; label: string }[]
+                ).map((opt) => (
+                  <button
+                    key={String(opt.key)}
+                    type="button"
+                    onClick={() => setLogScale(opt.key)}
+                    disabled={isLoading || (opt.key && effectiveChartView === 'percent')}
+                    title={
+                      opt.key && effectiveChartView === 'percent'
+                        ? 'A log axis cannot plot zero or negative values, and % Return crosses both.'
+                        : undefined
+                    }
+                    className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      effectiveLogScale === opt.key
+                        ? 'bg-gray-700 text-white shadow-sm'
+                        : 'text-muted hover:text-content'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <span className="text-xs text-muted">
                 % Return plots cumulative change from the first date in view; Price &amp;
-                drawdowns shades every stretch spent below a previous peak.
+                drawdowns shades every stretch spent below a previous peak. Log makes equal
+                distances mean equal percentage moves.
               </span>
             </div>
           </div>
@@ -420,6 +456,7 @@ export default function Home() {
               tickersData={filteredTickersData}
               rawTickersData={basisTickersData}
               view={effectiveChartView}
+              logScale={effectiveLogScale}
             />
           </div>
 
