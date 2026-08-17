@@ -162,6 +162,46 @@ export default function StatsPanel({ statistics, isLoading }: StatsPanelProps) {
                 isNegative={stats.threeYearReturn < 0}
               />
             )}
+            {stats.fiveYearReturn !== null && (
+              <StatRow
+                label="5Y Return"
+                value={formatPercent(stats.fiveYearReturn)}
+                isPositive={stats.fiveYearReturn > 0}
+                isNegative={stats.fiveYearReturn < 0}
+              />
+            )}
+            {stats.bestYear !== null && (
+              <StatRow
+                label="Best Year"
+                value={`${formatPercent(stats.bestYear.value)} (${stats.bestYear.label})`}
+                isPositive={stats.bestYear.value > 0}
+                isNegative={stats.bestYear.value < 0}
+              />
+            )}
+            {stats.worstYear !== null && (
+              <StatRow
+                label="Worst Year"
+                value={`${formatPercent(stats.worstYear.value)} (${stats.worstYear.label})`}
+                isPositive={stats.worstYear.value > 0}
+                isNegative={stats.worstYear.value < 0}
+              />
+            )}
+            {stats.bestMonth !== null && (
+              <StatRow
+                label="Best Month"
+                value={`${formatPercent(stats.bestMonth.value)} (${stats.bestMonth.label})`}
+                isPositive={stats.bestMonth.value > 0}
+                isNegative={stats.bestMonth.value < 0}
+              />
+            )}
+            {stats.worstMonth !== null && (
+              <StatRow
+                label="Worst Month"
+                value={`${formatPercent(stats.worstMonth.value)} (${stats.worstMonth.label})`}
+                isPositive={stats.worstMonth.value > 0}
+                isNegative={stats.worstMonth.value < 0}
+              />
+            )}
             <StatRow
               label="Growth of $1"
               value={`$${formatNumber(stats.growthOf1)}`}
