@@ -19,6 +19,14 @@ export interface ChartDataPoint {
   [ticker: string]: string | number;
 }
 
+/** A best/worst calendar period, carrying which one it was so the figure is readable. */
+export interface PeriodExtreme {
+  /** "2024" for a year, "Nov 2020" for a month. */
+  label: string;
+  /** Return over that period, in percent. */
+  value: number;
+}
+
 export interface Statistics {
   // Data section
   ticker: string;
@@ -33,6 +41,12 @@ export interface Statistics {
   ytdReturn: number | null;
   oneYearReturn: number | null;
   threeYearReturn: number | null;
+  fiveYearReturn: number | null;
+  /** Best/worst calendar year and month, on the same basis as the returns table. */
+  bestYear: PeriodExtreme | null;
+  worstYear: PeriodExtreme | null;
+  bestMonth: PeriodExtreme | null;
+  worstMonth: PeriodExtreme | null;
 
   // Drawdowns section
   maxDrawdown: number;

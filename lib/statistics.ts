@@ -10,6 +10,7 @@ import {
   StrategyStatistics,
   TrendFollowingAnalysis,
   RollingReturnDataPoint,
+  PeriodExtreme,
 } from './types';
 
 const RISK_FREE_RATE = 0.02; // 2% annual risk-free rate assumption
@@ -73,8 +74,17 @@ export function calculateStatistics(ticker: string, data: StooqDataPoint[]): Sta
     ? (annualizedReturn - RISK_FREE_RATE) / annualizedStd
     : 0;
 
-  // Calculate YTD, 1Y, 3Y returns
-  const { ytdReturn, oneYearReturn, threeYearReturn } = calculatePeriodReturns(data);
+  // Calculate YTD, 1Y, 3Y, 5Y returns plus the best/worst month and year
+  const {
+    ytdReturn,
+    oneYearReturn,
+    threeYearReturn,
+    fiveYearReturn,
+    bestYear,
+    worstYear,
+    bestMonth,
+    worstMonth,
+  } = calculatePeriodReturns(data);
 
   return {
     ticker,
@@ -87,6 +97,11 @@ export function calculateStatistics(ticker: string, data: StooqDataPoint[]): Sta
     ytdReturn,
     oneYearReturn,
     threeYearReturn,
+    fiveYearReturn,
+    bestYear,
+    worstYear,
+    bestMonth,
+    worstMonth,
     maxDrawdown,
     maxDrawdownDate,
     currentDrawdown,
@@ -219,13 +234,33 @@ function calculateAnnualizedStd(dailyReturns: number[]): number {
   return dailyStd * Math.sqrt(TRADING_DAYS_PER_YEAR);
 }
 
+const MONTH_ABBR = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 function calculatePeriodReturns(data: StooqDataPoint[]): {
   ytdReturn: number | null;
   oneYearReturn: number | null;
   threeYearReturn: number | null;
+  fiveYearReturn: number | null;
+  bestYear: PeriodExtreme | null;
+  worstYear: PeriodExtreme | null;
+  bestMonth: PeriodExtreme | null;
+  worstMonth: PeriodExtreme | null;
 } {
+  const empty = {
+    ytdReturn: null,
+    oneYearReturn: null,
+    threeYearReturn: null,
+    fiveYearReturn: null,
+    bestYear: null,
+    worstYear: null,
+    bestMonth: null,
+    worstMonth: null,
+  };
   if (data.length < 2) {
-    return { ytdReturn: null, oneYearReturn: null, threeYearReturn: null };
+    return empty;
   }
 
   // Sort data to ensure chronological order
@@ -275,7 +310,81 @@ function calculatePeriodReturns(data: StooqDataPoint[]): {
     ? ((endPrice - threeYearStartPrice) / threeYearStartPrice) * 100
     : null;
 
-  return { ytdReturn, oneYearReturn, threeYearReturn };
+  // 5Y: from 5 years ago to current date
+  const fiveYearsAgoStr = `${endYear - 5}-${endDateStr.substring(5)}`;
+  const fiveYearStartPrice = findPriceAtDate(fiveYearsAgoStr);
+  const fiveYearReturn = fiveYearStartPrice !== null
+    ? ((endPrice - fiveYearStartPrice) / fiveYearStartPrice) * 100
+    : null;
+
+  // --- Best/worst calendar month and year ---
+  // Both use the same month-end basis as the returns table, so the extremes named
+  // here are findable as cells in that table rather than being a second opinion.
+  // The map was filled in date order, so its entries are already chronological.
+  const monthEntries = Array.from(lastPriceByYearMonth.entries());
+
+  let bestMonth: PeriodExtreme | null = null;
+  let worstMonth: PeriodExtreme | null = null;
+  for (const [key, price] of monthEntries) {
+    const [yearStr, monthStr] = key.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const priorKey = month === 0 ? `${year - 1}-11` : `${year}-${month - 1}`;
+    const priorPrice = lastPriceByYearMonth.get(priorKey);
+    // A month with no preceding month-end has no return — the series' first month,
+    // or one following a gap in the data.
+    if (priorPrice === undefined || !(priorPrice > 0)) continue;
+    const value = (price / priorPrice - 1) * 100;
+    const label = `${MONTH_ABBR[month]} ${year}`;
+    if (bestMonth === null || value > bestMonth.value) bestMonth = { label, value };
+    if (worstMonth === null || value < worstMonth.value) worstMonth = { label, value };
+  }
+
+  // Last month-end of each year — December, or the latest month of a partial year.
+  const lastOfYear = new Map<number, { month: number; price: number }>();
+  for (const [key, price] of monthEntries) {
+    const [yearStr, monthStr] = key.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const current = lastOfYear.get(year);
+    if (current === undefined || month > current.month) {
+      lastOfYear.set(year, { month, price });
+    }
+  }
+
+  const yearsPresent = Array.from(lastOfYear.keys()).sort((a, b) => a - b);
+  let bestYear: PeriodExtreme | null = null;
+  let worstYear: PeriodExtreme | null = null;
+  for (const year of yearsPresent) {
+    const endOfYear = lastOfYear.get(year)!.price;
+    const priorDecember = lastPriceByYearMonth.get(`${year - 1}-11`);
+    let value: number | null = null;
+    if (priorDecember !== undefined && priorDecember > 0) {
+      value = (endOfYear / priorDecember - 1) * 100;
+    } else if (year === yearsPresent[0]) {
+      // The first year has no prior December to measure from, so it runs from the
+      // series' own first price — the same fallback the returns table uses.
+      const firstPrice = sortedData.find((p) => p.date.startsWith(`${year}-`))?.close;
+      if (firstPrice !== undefined && firstPrice > 0) {
+        value = (endOfYear / firstPrice - 1) * 100;
+      }
+    }
+    if (value === null) continue;
+    const label = String(year);
+    if (bestYear === null || value > bestYear.value) bestYear = { label, value };
+    if (worstYear === null || value < worstYear.value) worstYear = { label, value };
+  }
+
+  return {
+    ytdReturn,
+    oneYearReturn,
+    threeYearReturn,
+    fiveYearReturn,
+    bestYear,
+    worstYear,
+    bestMonth,
+    worstMonth,
+  };
 }
 
 export function normalizeDataForChart(tickersData: TickerData[]): ChartDataPoint[] {
