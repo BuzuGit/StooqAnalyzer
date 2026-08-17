@@ -251,6 +251,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
 
           {/* Annual return bars — positive use the bar color, negative are red */}
           <Bar
+            isAnimationActive={false}
             dataKey="annualReturn"
             fill={barColor}
             radius={[2, 2, 0, 0]}
@@ -274,6 +275,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
 
           {/* Max drawdown dots */}
           <Scatter
+            isAnimationActive={false}
             dataKey="maxDrawdown"
             fill="#dc2626"
             shape={(props: unknown) => {
@@ -360,6 +362,7 @@ export default function AnnualReturnsChart({ data, ticker }: AnnualReturnsChartP
           <ReferenceLine y={0} stroke="#9ca3af" strokeWidth={1} />
 
           <Bar
+            isAnimationActive={false}
             dataKey="returnValue"
             radius={[2, 2, 0, 0]}
             maxBarSize={viewMode === 'monthly' ? 20 : 35}

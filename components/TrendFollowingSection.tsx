@@ -418,6 +418,7 @@ export default function TrendFollowingSection({
 
             {/* Buy & Hold Area */}
             <Area
+              isAnimationActive={false}
               type="monotone"
               dataKey="buyHold"
               stroke="#2563eb"
@@ -429,6 +430,7 @@ export default function TrendFollowingSection({
 
             {/* Trend Following Line */}
             <Line
+              isAnimationActive={false}
               type="monotone"
               dataKey="trendFollowing"
               stroke="#16a34a"
@@ -439,6 +441,7 @@ export default function TrendFollowingSection({
 
             {/* 10m-SMA Line (grey, thin, dashed) */}
             <Line
+              isAnimationActive={false}
               type="monotone"
               dataKey="sma10"
               stroke="#9ca3af"
@@ -505,6 +508,7 @@ export default function TrendFollowingSection({
 
             {/* Buy & Hold Drawdown */}
             <Area
+              isAnimationActive={false}
               type="monotone"
               dataKey="buyHoldDrawdown"
               stroke="#2563eb"
@@ -516,6 +520,7 @@ export default function TrendFollowingSection({
 
             {/* Trend Following Drawdown */}
             <Area
+              isAnimationActive={false}
               type="monotone"
               dataKey="trendFollowingDrawdown"
               stroke="#16a34a"
