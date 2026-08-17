@@ -161,7 +161,7 @@ export default function DateRangeFilter({
             <button
               onClick={onDownloadExcel}
               disabled={disabled || isDownloading}
-              title="Download all sourced data as an Excel workbook (daily, monthly, yearly)"
+              title="Download an Excel workbook: statistics for the selected period, plus all sourced data (daily, monthly, yearly)"
               className="ml-1 inline-flex items-center gap-1 px-3 py-1 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDownloading ? (
