@@ -25,6 +25,7 @@ import {
   findUnderwaterPeriods,
   formatDaysAsPeriod,
 } from '@/lib/statistics';
+import { niceLogAxisScale } from '@/lib/axisScale';
 import { useTheme } from '@/components/ThemeProvider';
 import { getChartTheme } from '@/lib/chartTheme';
 import DrawdownChart from './DrawdownChart';
@@ -45,6 +46,8 @@ interface PriceChartProps {
   tickersData: TickerData[];
   rawTickersData: TickerData[];
   view?: ChartView;
+  /** Logarithmic Y axis, so equal distances mean equal percentage moves. */
+  logScale?: boolean;
 }
 
 /** Borrowed from PortfolioBacktester's palette so the two apps' drawdown charts match. */
@@ -145,6 +148,7 @@ export default function PriceChart({
   tickersData,
   rawTickersData,
   view = 'price',
+  logScale = false,
 }: PriceChartProps) {
   const percentMode = view === 'percent';
   const [show50SMA, setShow50SMA] = useState(false);
@@ -290,6 +294,28 @@ export default function PriceChart({
     const hwm = calculateHighWaterMark(primaryData);
     return hwm[hwm.length - 1];
   }, [drawdownView, primaryData]);
+
+  // Log needs its own gridlines and cannot plot zero or a negative value. Built from
+  // every series actually on screen, so the axis covers the SMAs and the high water
+  // mark too, and falls back to linear when nothing positive is left to plot.
+  //
+  // That fallback only catches a series that is ENTIRELY non-positive. A series that
+  // merely crosses zero still yields an axis — one built from the positive values
+  // alone, which would clip everything below it. Guarding that case is the caller's
+  // job: page.tsx suppresses log in % Return view for exactly this reason.
+  const logAxis = useMemo(() => {
+    if (!logScale) return null;
+    const rows = drawdownData ?? displayData;
+    const keys = [...tickers, 'sma50', 'sma200', 'hwm'];
+    const values: number[] = [];
+    for (const row of rows) {
+      for (const key of keys) {
+        const value = (row as Record<string, unknown>)[key];
+        if (typeof value === 'number') values.push(value);
+      }
+    }
+    return niceLogAxisScale(values);
+  }, [logScale, drawdownData, displayData, tickers]);
 
   // Calculate SMA distance data for the distance chart
   const smaDistanceData = useMemo(() => {
@@ -439,6 +465,15 @@ export default function PriceChart({
     if (inPercent) {
       return formatPercent(value, 0);
     }
+    // Log gridlines are 1-2-5 round numbers (0.5, 1, 2, 5, 20, 500…). Fixed decimals
+    // would render those as "20.00"; show each at its own natural precision instead.
+    if (logAxis) {
+      if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+      if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+      if (value >= 10) return value.toFixed(0);
+      if (value >= 1) return String(parseFloat(value.toFixed(1)));
+      return String(parseFloat(value.toPrecision(2)));
+    }
     if (value >= 1000000) {
       return `${(value / 1000000).toFixed(1)}M`;
     }
@@ -583,7 +618,9 @@ export default function PriceChart({
             <YAxis
               tick={{ fontSize: 12, fill: '#6b7280' }}
               tickFormatter={formatYAxis}
-              domain={['auto', 'auto']}
+              scale={logAxis ? 'log' : 'auto'}
+              domain={logAxis ? logAxis.domain : ['auto', 'auto']}
+              ticks={logAxis && logAxis.ticks.length > 0 ? logAxis.ticks : undefined}
             />
             <Tooltip
               contentStyle={{
@@ -625,6 +662,11 @@ export default function PriceChart({
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
+                // Recharts animates a line by morphing its path. Switching between
+                // Linear and Log moves every point at once, and morphing through that
+                // makes the chart lurch — and briefly draws the line against the wrong
+                // scale. Redrawing straight away is calmer and always self-consistent.
+                isAnimationActive={false}
               />
             ))}
 
@@ -675,6 +717,7 @@ export default function PriceChart({
                 activeDot={false}
                 connectNulls
                 name="50 SMA"
+                isAnimationActive={false}
               />
             )}
 
@@ -689,6 +732,7 @@ export default function PriceChart({
                 activeDot={false}
                 connectNulls
                 name="200 SMA"
+                isAnimationActive={false}
               />
             )}
 
