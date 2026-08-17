@@ -218,6 +218,7 @@ export default function RollingReturnsChart({ data, ticker }: RollingReturnsChar
 
             {/* Main CAGR line */}
             <Line
+              isAnimationActive={false}
               type="monotone"
               dataKey="rollingCagr"
               stroke="#2563eb"

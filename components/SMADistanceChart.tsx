@@ -227,6 +227,7 @@ export default function SMADistanceChart({
 
             {/* Single area with split gradient — one continuous line */}
             <Area
+              isAnimationActive={false}
               type="monotone"
               dataKey="distance"
               stroke="url(#smaDistStrokeGradient)"

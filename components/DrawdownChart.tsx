@@ -226,6 +226,7 @@ export default function DrawdownChart({
           {isMulti ? (
             multiData!.map((td) => (
               <Area
+                isAnimationActive={false}
                 key={td.ticker}
                 type="monotone"
                 dataKey={`dd_${td.ticker}`}
@@ -239,6 +240,7 @@ export default function DrawdownChart({
           ) : (
             <>
               <Area
+                isAnimationActive={false}
                 type="monotone"
                 dataKey="drawdown"
                 stroke={ct.seriesPrimary}
