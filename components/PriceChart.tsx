@@ -269,17 +269,23 @@ export default function PriceChart({
   // Recharts shades between two lines when a point carries a [low, high] pair, so we
   // hand it [price, high water mark]. At a new high the pair collapses to zero height
   // and nothing is drawn — exactly right, since there is no drawdown to shade there.
+  // One pass over the series, shared by the band, the end bubble and the labels —
+  // previously each of those recomputed the same high water mark.
+  const highWaterMark = useMemo(
+    () => (drawdownView ? calculateHighWaterMark(primaryData) : null),
+    [drawdownView, primaryData]
+  );
+
   const drawdownData = useMemo(() => {
-    if (!drawdownView) return null;
-    const hwm = calculateHighWaterMark(primaryData);
-    const hwmByDate = new Map(primaryData.map((point, i) => [point.date, hwm[i]]));
+    if (!drawdownView || !highWaterMark) return null;
+    const hwmByDate = new Map(primaryData.map((point, i) => [point.date, highWaterMark[i]]));
     return chartDataWithSMA.map((point) => {
       const price = point[primaryTicker];
       const mark = hwmByDate.get(point.date);
       if (typeof price !== 'number' || mark === undefined) return point;
       return { ...point, hwm: mark, underwaterBand: [price, mark] as [number, number] };
     });
-  }, [drawdownView, primaryData, chartDataWithSMA, primaryTicker]);
+  }, [drawdownView, highWaterMark, primaryData, chartDataWithSMA, primaryTicker]);
 
   const underwaterPeriods = useMemo(
     () =>
@@ -289,11 +295,7 @@ export default function PriceChart({
     [drawdownView, primaryData]
   );
 
-  const lastHwm = useMemo(() => {
-    if (!drawdownView) return undefined;
-    const hwm = calculateHighWaterMark(primaryData);
-    return hwm[hwm.length - 1];
-  }, [drawdownView, primaryData]);
+  const lastHwm = highWaterMark ? highWaterMark[highWaterMark.length - 1] : undefined;
 
   // Log needs its own gridlines and cannot plot zero or a negative value. Built from
   // every series actually on screen, so the axis covers the SMAs and the high water
@@ -301,10 +303,10 @@ export default function PriceChart({
   //
   // That fallback only catches a series that is ENTIRELY non-positive. A series that
   // merely crosses zero still yields an axis — one built from the positive values
-  // alone, which would clip everything below it. Guarding that case is the caller's
-  // job: page.tsx suppresses log in % Return view for exactly this reason.
+  // alone, which would clip everything below it. Percent series routinely cross zero,
+  // so log is refused here rather than trusting every caller to remember.
   const logAxis = useMemo(() => {
-    if (!logScale) return null;
+    if (!logScale || inPercent) return null;
     const rows = drawdownData ?? displayData;
     const keys = [...tickers, 'sma50', 'sma200', 'hwm'];
     const values: number[] = [];
