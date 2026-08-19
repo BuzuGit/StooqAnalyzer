@@ -569,8 +569,9 @@ export default function PriceChart({
         )}
         {drawdownView && (
           <p className="text-sm text-muted">
-            Shaded area is the gap below the high water mark; labels give the duration of
-            each stretch underwater lasting a year or more.
+            Shaded area is the gap below the high water mark. For each stretch underwater
+            lasting a year or more, the label above gives its full duration and the label
+            at the low gives how long the fall from the peak took.
           </p>
         )}
       </div>
@@ -701,6 +702,27 @@ export default function PriceChart({
                 label={{
                   value: formatDaysAsPeriod(period.days),
                   position: 'top',
+                  fontSize: 11,
+                  fill: HWM_LABEL_COLOR,
+                  fontWeight: 600,
+                }}
+              />
+            ))}
+
+            {/* The other half of the same story, under the price line: how long the
+                fall itself took, peak -> the lowest close of that stretch. Anchored
+                at the trough by an invisible dot, so it sits below the low. */}
+            {underwaterPeriods.map((period) => (
+              <ReferenceDot
+                key={`underwater-fall-${period.startDate}`}
+                x={period.troughDate}
+                y={period.troughPrice}
+                r={0}
+                fill="none"
+                stroke="none"
+                label={{
+                  value: formatDaysAsPeriod(period.daysToTrough),
+                  position: 'bottom',
                   fontSize: 11,
                   fill: HWM_LABEL_COLOR,
                   fontWeight: 600,
