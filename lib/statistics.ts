@@ -473,6 +473,12 @@ export interface UnderwaterPeriod {
   days: number;
   /** Price level the series is climbing back to. */
   peak: number;
+  /** Session of the lowest close inside the stretch — the bottom of the drawdown. */
+  troughDate: string;
+  /** That lowest close, in price units. */
+  troughPrice: number;
+  /** Calendar days from the peak down to that trough — the fall, without the recovery. */
+  daysToTrough: number;
   /** True when the series never recovered inside this window. */
   ongoing: boolean;
 }
@@ -516,12 +522,20 @@ export function findUnderwaterPeriods(data: StooqDataPoint[]): UnderwaterPeriod[
     const peakIdx = Math.max(0, startIdx - 1);
     const recovered = endIdx + 1 < data.length;
     const endIdxForSpan = recovered ? endIdx + 1 : endIdx;
+    // The bottom of this stretch: the lowest close between the peak and the recovery.
+    let troughIdx = startIdx;
+    for (let i = startIdx + 1; i <= endIdx; i++) {
+      if (data[i].close < data[troughIdx].close) troughIdx = i;
+    }
     periods.push({
       startDate: data[peakIdx].date,
       endDate: data[endIdxForSpan].date,
       midDate: data[Math.floor((startIdx + endIdx) / 2)].date,
       days: dayCount(data[peakIdx].date, data[endIdxForSpan].date),
       peak: hwm[startIdx],
+      troughDate: data[troughIdx].date,
+      troughPrice: data[troughIdx].close,
+      daysToTrough: dayCount(data[peakIdx].date, data[troughIdx].date),
       ongoing: !recovered,
     });
   };
