@@ -14,6 +14,7 @@ import {
   ReferenceLine,
   Legend,
   Label,
+  Customized,
 } from 'recharts';
 import { ChartDataPoint, TickerData } from '@/lib/types';
 import {
@@ -98,36 +99,69 @@ function PriceLabel({
   );
 }
 
-// Unified end-of-chart bubble renderer: renders all price/SMA bubbles sorted by value (highest on top)
+/** End-of-chart bubble geometry: 20px tall, 2px clear between neighbours. */
+const BUBBLE_HEIGHT = 20;
+const BUBBLE_PITCH = 22;
+
+/**
+ * End-of-chart bubbles (last price, SMAs, high water mark). Each one sits on its
+ * own line's final value rather than being stacked under the topmost series —
+ * with the price far below its peak, a stacked bubble would point at nothing.
+ *
+ * Rendered through <Customized>, which hands us the chart's y scale and plot
+ * offset; that scale is the only way to turn a value into the pixel row its line
+ * actually occupies (and it covers the log axis for free).
+ */
 function EndBubbles({
-  viewBox,
   items,
+  yAxisMap,
+  offset,
 }: {
-  viewBox?: { x: number; y: number; width: number };
-  items: { label: string; color: string }[];
+  items?: { value: number; label: string; color: string }[];
+  yAxisMap?: Record<string, { scale?: (value: number) => number }>;
+  offset?: { left: number; top: number; width: number; height: number };
 }) {
-  if (!viewBox || items.length === 0) return null;
-  const { x, y, width = 0 } = viewBox;
-  const bubbleX = x + width + 5;
+  const scale = yAxisMap ? Object.values(yAxisMap)[0]?.scale : undefined;
+  if (!items || items.length === 0 || !offset || typeof scale !== 'function') return null;
+
+  const bubbleX = offset.left + offset.width + 5;
+
+  // Place each bubble on its own value, then declutter: one downward pass opens
+  // every gap to a full pitch (this is what keeps the price bubble clear of the
+  // high water mark when the two nearly touch), then an upward pass pulls the
+  // stack back inside the plot if the last one was pushed off the bottom.
+  const placed = items
+    .map((item) => ({ ...item, y: scale(item.value) - BUBBLE_HEIGHT / 2 }))
+    .sort((a, b) => a.y - b.y);
+
+  for (let k = 1; k < placed.length; k++) {
+    placed[k].y = Math.max(placed[k].y, placed[k - 1].y + BUBBLE_PITCH);
+  }
+  const lowest = offset.top + offset.height - BUBBLE_HEIGHT;
+  if (placed[placed.length - 1].y > lowest) {
+    placed[placed.length - 1].y = lowest;
+    for (let k = placed.length - 2; k >= 0; k--) {
+      placed[k].y = Math.min(placed[k].y, placed[k + 1].y - BUBBLE_PITCH);
+    }
+  }
 
   return (
     <g>
-      {items.map((item, idx) => {
+      {placed.map((item, idx) => {
         const bubbleWidth = Math.max(item.label.length * 7 + 12, 35);
-        const bubbleY = y - 10 + idx * 22;
         return (
           <g key={idx}>
             <rect
               x={bubbleX}
-              y={bubbleY}
+              y={item.y}
               width={bubbleWidth}
-              height={20}
+              height={BUBBLE_HEIGHT}
               rx={4}
               fill={item.color}
             />
             <text
               x={bubbleX + bubbleWidth / 2}
-              y={bubbleY + 14}
+              y={item.y + 14}
               fill="white"
               fontSize={10}
               fontWeight="500"
@@ -766,8 +800,9 @@ export default function PriceChart({
               <ReferenceLine y={0} stroke={ct.seriesPrimary} strokeWidth={1} strokeOpacity={0.5} />
             )}
 
-            {/* High point marker with label */}
-            {extremes && (
+            {/* High point marker with label. Hidden in the drawdown view, where the
+                high water mark line already traces every peak. */}
+            {extremes && !drawdownView && (
               <ReferenceDot
                 x={extremes.highPoint.date}
                 y={toDisplayValue(extremes.highPoint.price)}
@@ -788,8 +823,8 @@ export default function PriceChart({
               </ReferenceDot>
             )}
 
-            {/* Low point marker with label */}
-            {extremes && (
+            {/* Low point marker with label — see above for why the drawdown view skips it. */}
+            {extremes && !drawdownView && (
               <ReferenceDot
                 x={extremes.lowPoint.date}
                 y={toDisplayValue(extremes.lowPoint.price)}
@@ -821,8 +856,9 @@ export default function PriceChart({
               />
             )}
 
-            {/* End-of-chart bubbles (price + SMAs) sorted by value, highest on top */}
-            {isSingleTicker && currentPrice && lastDate && (() => {
+            {/* End-of-chart bubbles: last price, any SMAs on screen, and the high
+                water mark — each aligned with the end of its own line. */}
+            {isSingleTicker && currentPrice && (() => {
               const bubble = (price: number, color: string) => {
                 const value = toDisplayValue(price);
                 return { value, label: formatDisplay(value), color };
@@ -839,17 +875,7 @@ export default function PriceChart({
               if (drawdownView && lastHwm !== undefined) {
                 items.push(bubble(lastHwm, HWM_COLOR));
               }
-              items.sort((a, b) => b.value - a.value);
-              const anchorValue = items[0].value;
-              return (
-                <ReferenceDot x={lastDate} y={anchorValue} r={0}>
-                  <Label
-                    content={
-                      <EndBubbles items={items.map(i => ({ label: i.label, color: i.color }))} />
-                    }
-                  />
-                </ReferenceDot>
-              );
+              return <Customized component={<EndBubbles items={items} />} />;
             })()}
           </ComposedChart>
         </ResponsiveContainer>
