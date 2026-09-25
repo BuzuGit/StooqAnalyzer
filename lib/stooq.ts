@@ -4,7 +4,6 @@ import { StooqDataPoint } from './types';
 import {
   createSession,
   getSession,
-  hasSharedSessionStore,
   saveSession,
   serializeCookies,
   storeSetCookies,
@@ -283,16 +282,6 @@ export async function submitStooqCaptcha(token: string, code: string): Promise<b
  * fetchStooqData). Often the warm-up cookies alone are enough to download.
  */
 export async function ensureStooqSession(token?: string): Promise<string> {
-  // On Vercel the CAPTCHA flow spans several isolated serverless requests, so it
-  // needs a shared session store (Redis). Without one the session is lost between
-  // requests and the download can never unlock — fail loudly with instructions.
-  if (process.env.VERCEL && !hasSharedSessionStore()) {
-    throw new StooqBlockedError(
-      'Stooq needs a Redis store on Vercel so its CAPTCHA session survives across ' +
-        'serverless requests. Add Upstash Redis (or Vercel KV) to the project and redeploy. ' +
-        'Meanwhile, use Yahoo or Twelve Data.'
-    );
-  }
   const session = await ensurePowSession(token);
   return session.token;
 }
