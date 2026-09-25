@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { ProxyAgent } from 'undici';
+import { ProxyAgent, request } from 'undici';
 import { StooqDataPoint } from './types';
 import {
   createSession,
@@ -10,7 +10,7 @@ import {
   storeSetCookies,
   StooqSession,
 } from './stooqSession';
-import { fetchWithTimeout } from './http';
+import { UPSTREAM_TIMEOUT_MS } from './http';
 
 const STOOQ_ORIGIN = 'https://stooq.pl';
 const STOOQ_BASE_URL = `${STOOQ_ORIGIN}/q/d/l/`;
@@ -74,25 +74,83 @@ function solveProofOfWork(challenge: string, difficulty: number): number {
   throw new StooqBlockedError('Could not solve the Stooq proof-of-work challenge');
 }
 
-function stooqFetch(url: string, session: StooqSession, init?: RequestInit) {
-  const cookie = serializeCookies(session);
-  return fetchWithTimeout(url, {
-    ...init,
-    // Never let Next.js cache these — a cached response replays no fresh
-    // Set-Cookie headers, which silently drops the per-visit session cookies
-    // (cookie_uu / uid) that Stooq's download grant requires.
-    cache: 'no-store',
-    // Route through the fixed proxy (if configured) so every request in the flow
-    // shares one egress IP. `dispatcher` is a valid undici/Node fetch option even
-    // though it's not in the DOM RequestInit type.
-    ...(proxyDispatcher ? ({ dispatcher: proxyDispatcher } as object) : {}),
-    headers: {
-      'User-Agent': UA,
-      Referer: `${STOOQ_ORIGIN}/q/d/?s=`,
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...(init?.headers || {}),
-    },
-  });
+/** Statuses a Response may not carry a body for. */
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * One request to Stooq, sent with undici's low-level request() rather than fetch().
+ *
+ * fetch() follows the browser Fetch spec, so it stamps every request with
+ * `Sec-Fetch-Mode: cors` — and Stooq now answers anything carrying that header with
+ * a flat 403 "Odmowa dostępu" before its challenge even starts (a browser loading a
+ * page sends `navigate`; only scripts send `cors`). request() sends exactly the
+ * headers listed here and nothing else. It also sidesteps Next.js's patched fetch,
+ * so no response is ever cached — a cached response replays no Set-Cookie, which
+ * would silently drop the per-visit cookies (cookie_uu / uid) the download needs.
+ *
+ * Redirects are followed by hand so a Set-Cookie on an intermediate hop still lands
+ * in the jar. The result is wrapped in a standard Response so callers stay the same.
+ */
+async function stooqFetch(
+  url: string,
+  session: StooqSession,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {}
+): Promise<Response> {
+  let target = url;
+  let method = init.method ?? 'GET';
+  let body = init.body;
+
+  for (let hop = 0; hop < 5; hop++) {
+    const cookie = serializeCookies(session);
+    let res: Awaited<ReturnType<typeof request>>;
+    try {
+      res = await request(target, {
+        method: method as 'GET' | 'POST',
+        body,
+        // Route through the fixed proxy (if configured) so every request in the
+        // flow shares one egress IP.
+        dispatcher: proxyDispatcher,
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        headers: {
+          'User-Agent': UA,
+          Referer: `${STOOQ_ORIGIN}/q/d/?s=`,
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (error) {
+      const name = (error as { name?: string } | null)?.name;
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        throw new Error(
+          `Stooq did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s. It may be down or rate limiting — try again.`
+        );
+      }
+      throw error;
+    }
+
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(res.headers)) {
+      if (value === undefined) continue;
+      for (const v of Array.isArray(value) ? value : [value]) headers.append(name, v);
+    }
+
+    const location = headers.get('location');
+    if (res.statusCode >= 300 && res.statusCode < 400 && location) {
+      await res.body.dump();
+      storeSetCookies(session, new Response(null, { status: res.statusCode, headers }));
+      target = new URL(location, target).toString();
+      method = 'GET';
+      body = undefined;
+      continue;
+    }
+
+    const payload = await res.body.arrayBuffer();
+    return new Response(NULL_BODY_STATUSES.has(res.statusCode) ? null : payload, {
+      status: res.statusCode,
+      headers,
+    });
+  }
+  throw new StooqBlockedError('Stooq redirected too many times');
 }
 
 function downloadUrl(ticker: string, apiKey?: string): string {
@@ -273,6 +331,7 @@ export async function fetchStooqData(
 
   if (text.includes('Odmowa') || text.includes('This site requires JavaScript')) {
     if (session.unlocked) {
+      const held = ` (Session cookies: ${Object.keys(session.cookies).join(', ') || 'none'}.)`;
       // CAPTCHA was solved yet the download is still denied — don't loop.
       // On Vercel without a proxy this is the datacenter-IP block: Stooq denies
       // downloads from datacenter IPs even after a correct CAPTCHA.
@@ -280,12 +339,14 @@ export async function fetchStooqData(
         throw new StooqBlockedError(
           "Stooq denied the download even though the CAPTCHA was correct — Vercel's datacenter IP is " +
             'blocked by Stooq. Set STOOQ_PROXY_URL (a fixed, ideally residential proxy) in Vercel so ' +
-            'Stooq requests come from one trusted IP. Meanwhile, use Yahoo, Twelve Data or Google.'
+            'Stooq requests come from one trusted IP. Meanwhile, use Yahoo, Twelve Data or Google.' +
+            held
         );
       }
       throw new StooqBlockedError(
         'Stooq is still denying the download after a solved CAPTCHA — a temporary per-IP block or ' +
-          'daily limit. Try again later, or use another source.'
+          'daily limit. Try again later, or use another source.' +
+          held
       );
     }
     // First denial: Stooq wants a CAPTCHA right now — ask the client to prompt.
