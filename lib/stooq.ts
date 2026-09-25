@@ -137,7 +137,13 @@ async function stooqFetch(
     if (res.statusCode >= 300 && res.statusCode < 400 && location) {
       await res.body.dump();
       storeSetCookies(session, new Response(null, { status: res.statusCode, headers }));
-      target = new URL(location, target).toString();
+      const next = new URL(location, target);
+      // The jar holds Stooq's session cookies and every request sends them, so a
+      // redirect to another host would hand them over. Stay on Stooq or stop.
+      if (next.origin !== STOOQ_ORIGIN) {
+        throw new StooqBlockedError(`Stooq redirected to another site (${next.host}); not following.`);
+      }
+      target = next.toString();
       method = 'GET';
       body = undefined;
       continue;
