@@ -196,7 +196,12 @@ async function fetchYahooSymbol(
   if (response.status === 404) return 'not-found';
   if (!response.ok) return 'unavailable'; // 429/5xx on every host
 
-  const json: YahooChartResponse = await response.json();
+  let json: YahooChartResponse;
+  try {
+    json = await response.json();
+  } catch {
+    return 'unavailable'; // a consent/error page served as 200 — not an answer about the symbol
+  }
   if (json.chart?.error) return 'not-found';
 
   const result = json.chart?.result?.[0];

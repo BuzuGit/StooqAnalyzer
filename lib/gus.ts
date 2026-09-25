@@ -23,13 +23,15 @@ type Frequency = 'monthly' | 'annual';
  * file is only a fallback for when the page can't be read — it will 404 once
  * superseded, which is why it isn't the primary route.
  */
-const FILES: Record<Frequency, { page: string; fallback: string }> = {
+const FILES: Record<Frequency, { page: string; stem: string; fallback: string }> = {
   monthly: {
     page: `${CPI_PAGES}/miesieczne-wskazniki-cen-towarow-i-uslug-konsumpcyjnych-od-1982-roku/`,
+    stem: 'miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku',
     fallback: `${GUS_ORIGIN}/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv`,
   },
   annual: {
     page: `${CPI_PAGES}/roczne-wskazniki-cen-towarow-i-uslug-konsumpcyjnych/`,
+    stem: 'rocznewskaznikicentowarowiuslugkonsumpcyjnychod1950roku',
     fallback: `${GUS_ORIGIN}/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/5239/1/1/rocznewskaznikicentowarowiuslugkonsumpcyjnychod1950roku_2.csv`,
   },
 };
@@ -92,13 +94,20 @@ function decode(buffer: ArrayBuffer): string {
   }
 }
 
+/**
+ * Only a link to GUS's own server, to the expected file, is followed. The page is
+ * someone else's HTML: taking the first .csv link wherever it pointed would let a
+ * changed or tampered page send this server to fetch from any host.
+ */
 async function findCsvUrl(frequency: Frequency): Promise<string> {
-  const { page, fallback } = FILES[frequency];
+  const { page, stem, fallback } = FILES[frequency];
   try {
     const res = await fetchWithTimeout(page, { next: { revalidate: CACHE_SECONDS } }, 'GUS');
     if (res.ok) {
-      const href = (await res.text()).match(/href="([^"]+\.csv)"/i)?.[1];
-      if (href) return new URL(href, GUS_ORIGIN).toString();
+      for (const [, href] of (await res.text()).matchAll(/href="([^"]+\.csv)"/gi)) {
+        const url = new URL(href, GUS_ORIGIN);
+        if (url.origin === GUS_ORIGIN && url.pathname.includes(stem)) return url.toString();
+      }
     }
   } catch {
     // page unreachable — fall through to the last known file

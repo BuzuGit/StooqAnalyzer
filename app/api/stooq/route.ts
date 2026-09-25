@@ -13,6 +13,7 @@ import { fetchNbpData, NbpTickerError } from '@/lib/nbp';
 import { fetchFredData, FredSeriesError } from '@/lib/fred';
 import { fetchGusData, GusSeriesError } from '@/lib/gus';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
+import { UNAVAILABLE_SOURCES } from '@/lib/sources';
 
 type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
 
@@ -33,16 +34,19 @@ const STALE_SECONDS = 24 * 60 * 60;
 /** A load where a fallback stood in is kept only briefly, so the real source is retried soon. */
 const FALLBACK_SECONDS = 5 * 60;
 
-/** Per-series memory cache (lib/seriesCache) for the sources without their own. */
+/**
+ * Per-series memory cache (lib/seriesCache). An empty result isn't kept: it's
+ * usually a blip upstream, and keeping it would pin "no data" for an hour.
+ */
 function cachedSeries(
   source: DataSource,
   ticker: string,
   load: (ticker: string) => Promise<StooqDataPoint[]>
 ): Promise<StooqDataPoint[]> {
-  return cached(`${source}:${ticker.trim().toUpperCase()}`, async () => ({
-    value: await load(ticker),
-    ttlMs: FRESH_SECONDS * 1000,
-  }));
+  return cached(`${source}:${ticker.trim().toUpperCase()}`, async () => {
+    const value = await load(ticker);
+    return { value, ttlMs: value.length > 0 ? FRESH_SECONDS * 1000 : 0 };
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -64,6 +68,12 @@ export async function GET(request: NextRequest) {
       ? 'gus'
       : 'yahoo';
   const sessionToken = searchParams.get('session') || undefined;
+
+  // Switched off in the page — and refused here too, so a direct call can't run it.
+  const unavailable = UNAVAILABLE_SOURCES[source];
+  if (unavailable) {
+    return NextResponse.json<ApiResponse>({ success: false, error: unavailable }, { status: 503 });
+  }
 
   if (!tickersParam) {
     return NextResponse.json<ApiResponse>(
