@@ -80,6 +80,8 @@ export interface ApiResponse {
   captchaRequired?: boolean;
   /** Stooq only: session token to use with the CAPTCHA endpoints and the retry request. */
   sessionToken?: string;
+  /** Things the user should know about a successful load, e.g. a source that stood in for another. */
+  notices?: string[];
 }
 
 // Trend Following Strategy Types

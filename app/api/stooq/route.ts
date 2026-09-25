@@ -5,7 +5,8 @@ import {
   StooqBlockedError,
   StooqCaptchaRequiredError,
 } from '@/lib/stooq';
-import { fetchYahooData } from '@/lib/yahoo';
+import { fetchYahooWithFallback } from '@/lib/yahooFallback';
+import { cached } from '@/lib/seriesCache';
 import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
 import { fetchGoogleFinance, GoogleFinanceConfigError } from '@/lib/googlefinance';
 import { fetchNbpData, NbpTickerError } from '@/lib/nbp';
@@ -14,6 +15,35 @@ import { fetchGusData, GusSeriesError } from '@/lib/gus';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
 type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
+
+/**
+ * The Google proxy alone can take ~10s a ticker, and a Yahoo outage costs its own
+ * timeouts before Google stands in — well past a 10s function limit.
+ */
+export const maxDuration = 60;
+
+/**
+ * Price histories change once a day, so a result is served as-is for an hour, and
+ * for a day after that it's still served instantly while a fresh copy downloads in
+ * the background (stale-while-revalidate). Vercel's edge honours this, so repeating
+ * a view — a reload, a shared link — doesn't run the function at all.
+ */
+const FRESH_SECONDS = 60 * 60;
+const STALE_SECONDS = 24 * 60 * 60;
+/** A load where a fallback stood in is kept only briefly, so the real source is retried soon. */
+const FALLBACK_SECONDS = 5 * 60;
+
+/** Per-series memory cache (lib/seriesCache) for the sources without their own. */
+function cachedSeries(
+  source: DataSource,
+  ticker: string,
+  load: (ticker: string) => Promise<StooqDataPoint[]>
+): Promise<StooqDataPoint[]> {
+  return cached(`${source}:${ticker.trim().toUpperCase()}`, async () => ({
+    value: await load(ticker),
+    ttlMs: FRESH_SECONDS * 1000,
+  }));
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -65,27 +95,44 @@ export async function GET(request: NextRequest) {
     // sequential: all tickers share one CAPTCHA-unlocked session and Stooq rate
     // limits per IP.
     let datasets: StooqDataPoint[][];
+    const notices: string[] = [];
     if (source === 'yahoo') {
-      datasets = await Promise.all(tickers.map((ticker) => fetchYahooData(ticker)));
+      const results = await Promise.all(
+        tickers.map((ticker) =>
+          cached(`yahoo:${ticker.trim().toUpperCase()}`, async () => {
+            const result = await fetchYahooWithFallback(ticker);
+            const ttl = result.notice ? FALLBACK_SECONDS : FRESH_SECONDS;
+            return { value: result, ttlMs: ttl * 1000 };
+          })
+        )
+      );
+      datasets = results.map((result) => result.data);
+      for (const result of results) if (result.notice) notices.push(result.notice);
     } else if (source === 'twelvedata') {
-      datasets = await Promise.all(tickers.map((ticker) => fetchTwelveData(ticker)));
+      datasets = await Promise.all(
+        tickers.map((ticker) => cachedSeries(source, ticker, fetchTwelveData))
+      );
     } else if (source === 'fred') {
-      datasets = await Promise.all(tickers.map((ticker) => fetchFredData(ticker)));
+      datasets = await Promise.all(
+        tickers.map((ticker) => cachedSeries(source, ticker, fetchFredData))
+      );
     } else if (source === 'gus') {
       // Tickers share one file per frequency, downloaded once (see lib/gus).
-      datasets = await Promise.all(tickers.map((ticker) => fetchGusData(ticker)));
+      datasets = await Promise.all(
+        tickers.map((ticker) => cachedSeries(source, ticker, fetchGusData))
+      );
     } else if (source === 'nbp') {
       // Each pair already fans out ~25 windowed requests internally, so keep the
       // tickers themselves sequential rather than multiplying that against NBP.
       datasets = [];
       for (const ticker of tickers) {
-        datasets.push(await fetchNbpData(ticker));
+        datasets.push(await cachedSeries(source, ticker, fetchNbpData));
       }
     } else if (source === 'google') {
       // The Apps Script proxy serializes on one sheet — fetch sequentially.
       datasets = [];
       for (const ticker of tickers) {
-        datasets.push(await fetchGoogleFinance(ticker));
+        datasets.push(await cachedSeries(source, ticker, fetchGoogleFinance));
       }
     } else {
       const token = await ensureStooqSession(sessionToken);
@@ -106,10 +153,17 @@ export async function GET(request: NextRequest) {
       results.push({ ticker: tickers[i].toUpperCase(), data: datasets[i] });
     }
 
-    return NextResponse.json<ApiResponse>({
-      success: true,
-      data: results,
-    });
+    // Stooq's answer depends on a CAPTCHA session, so it's never shared.
+    const cacheControl =
+      source === 'stooq'
+        ? 'no-store'
+        : notices.length > 0
+        ? `public, s-maxage=${FALLBACK_SECONDS}`
+        : `public, s-maxage=${FRESH_SECONDS}, stale-while-revalidate=${STALE_SECONDS}`;
+    return NextResponse.json<ApiResponse>(
+      { success: true, data: results, ...(notices.length > 0 ? { notices } : {}) },
+      { headers: { 'Cache-Control': cacheControl } }
+    );
   } catch (error) {
     console.error('Error fetching market data:', error);
 

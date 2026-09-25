@@ -15,20 +15,22 @@ type FetchInit = RequestInit & { dispatcher?: object };
  * fetch that gives up rather than hanging, and names the source when it does.
  *
  * Note this sets `signal`, so it must not be used with a caller-supplied one —
- * no call site needs both today.
+ * no call site needs both today. `timeoutMs` is for the rare source that is slow
+ * by nature rather than stalled (the Google Sheets proxy).
  */
 export async function fetchWithTimeout(
   url: string,
   init: FetchInit = {},
-  source = 'The data source'
+  source = 'The data source',
+  timeoutMs = UPSTREAM_TIMEOUT_MS
 ): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     const name = (error as { name?: string } | null)?.name;
     if (name === 'TimeoutError' || name === 'AbortError') {
       throw new Error(
-        `${source} did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s. It may be down or rate limiting — try again.`
+        `${source} did not respond within ${timeoutMs / 1000}s. It may be down or rate limiting — try again.`
       );
     }
     throw error;
