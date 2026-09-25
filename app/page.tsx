@@ -26,6 +26,24 @@ import {
   YearlyData,
 } from '@/lib/statistics';
 
+/**
+ * Credited in the footer. Only sources that currently supply data — Stooq returns
+ * here once it works again. GUS publishes under CC BY 4.0, which requires naming
+ * the source and the licence.
+ */
+const DATA_CREDITS: { name: string; href: string; licence?: { name: string; href: string } }[] = [
+  { name: 'Yahoo Finance', href: 'https://finance.yahoo.com' },
+  { name: 'Twelve Data', href: 'https://twelvedata.com' },
+  { name: 'Google Finance', href: 'https://www.google.com/finance' },
+  { name: 'NBP (National Bank of Poland)', href: 'https://api.nbp.pl' },
+  {
+    name: 'Statistics Poland (GUS)',
+    href: 'https://stat.gov.pl',
+    licence: { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/' },
+  },
+  { name: 'FRED (Federal Reserve Bank of St. Louis)', href: 'https://fred.stlouisfed.org' },
+];
+
 export default function Home() {
   // Raw data from API (never filtered)
   const [rawTickersData, setRawTickersData] = useState<TickerData[]>([]);
@@ -607,24 +625,33 @@ export default function Home() {
         {/* Footer Info */}
         <footer className="mt-8 text-center text-sm text-muted">
           <p>
-            Data provided by{' '}
-            <a
-              href="https://finance.yahoo.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              Yahoo Finance
-            </a>{' '}
-            and{' '}
-            <a
-              href="https://stooq.pl"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              stooq.pl
-            </a>
+            Data from{' '}
+            {DATA_CREDITS.map((credit, i) => (
+              <span key={credit.name}>
+                {i > 0 && ' · '}
+                <a
+                  href={credit.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  {credit.name}
+                </a>
+                {credit.licence && (
+                  <>
+                    {', '}
+                    <a
+                      href={credit.licence.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {credit.licence.name}
+                    </a>
+                  </>
+                )}
+              </span>
+            ))}
           </p>
           <p className="mt-1">
             {source === 'yahoo'
