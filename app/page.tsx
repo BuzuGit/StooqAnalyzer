@@ -43,6 +43,8 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Heads-ups about a successful load, e.g. Google standing in for Yahoo.
+  const [notices, setNotices] = useState<string[]>([]);
   const [focusedTickerIndex, setFocusedTickerIndex] = useState(0);
   const [source, setSource] = useState<DataSource>('yahoo');
   // Source the currently loaded data actually came from (may differ from the
@@ -161,6 +163,7 @@ export default function Home() {
         }
 
         const data = result.data;
+        setNotices(result.notices ?? []);
         setRawTickersData(data);
         setDataSource(selectedSource);
         const focus = restore?.focus?.toUpperCase();
@@ -177,6 +180,7 @@ export default function Home() {
       } catch (err) {
         console.error('Error:', err);
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+        setNotices([]);
         setRawTickersData([]);
         setAvailableDateRange({ minDate: '', maxDate: '' });
         setDateRange({ start: '', end: '' });
@@ -512,6 +516,17 @@ export default function Home() {
               <span className="text-red-700 font-medium">Error</span>
             </div>
             <p className="mt-1 text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Heads-ups about a load that worked, just not the usual way */}
+        {!error && notices.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg border border-line bg-panel">
+            {notices.map((notice) => (
+              <p key={notice} className="text-sm text-amber-700 dark:text-amber-300">
+                {notice}
+              </p>
+            ))}
           </div>
         )}
 

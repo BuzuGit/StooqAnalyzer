@@ -1,6 +1,28 @@
 import { StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
 
+/**
+ * The proxy drives a live spreadsheet: GOOGLEFINANCE recalculates, the script reads
+ * it back, and a lock queues concurrent callers. Measured 2026-09-25 at 6.5–9.4s per
+ * ticker (12s for one it doesn't know) — past the 8s default deadline, so this
+ * source was failing intermittently. Room to finish, but still a limit.
+ */
+const GOOGLE_TIMEOUT_MS = 25_000;
+
+/**
+ * The proxy serves one ticker at a time (its script holds a lock), so calls from
+ * this server are queued here instead of left to wait inside Google: time spent
+ * in Google's line counts against a call's deadline, and two tickers sent at once
+ * (a Yahoo outage falls back on every ticker in parallel) saw the second one time
+ * out while still waiting.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task);
+  queue = run.catch(() => undefined);
+  return run;
+}
+
 /** Raised when the Google Finance (Apps Script) endpoint isn't configured. */
 export class GoogleFinanceConfigError extends Error {
   constructor(message: string) {
@@ -13,8 +35,8 @@ export class GoogleFinanceConfigError extends Error {
  * Map an app ticker to a GOOGLEFINANCE symbol.
  *   - .WA  -> WSE:<base>   (Warsaw)   .L -> LON:   .DE -> ETR:  (Xetra)
  *   - FX   USDPLN=X / USDPLN -> CURRENCY:USDPLN
+ *   - crypto BTC-USD -> CURRENCY:BTCUSD (verified 2026-09-25: history from 2016)
  *   - bare -> as-is (Google resolves the primary listing)
- * (GOOGLEFINANCE has no crypto support, so BTC-USD etc. will simply return no data.)
  */
 export function toGoogleSymbol(ticker: string): string {
   const t = ticker.trim().toUpperCase();
@@ -24,6 +46,9 @@ export function toGoogleSymbol(ticker: string): string {
   if (t.endsWith('.PL')) return `WSE:${t.slice(0, -3)}`;
   if (/^[A-Z]{6}=X$/.test(t)) return `CURRENCY:${t.slice(0, 6)}`;
   if (/^[A-Z]{6}$/.test(t)) return `CURRENCY:${t}`;
+  // Only fiat quote currencies: Yahoo also uses a hyphen for share classes (BRK-B).
+  const crypto = t.match(/^([A-Z0-9]{2,10})-(USD|EUR|GBP|PLN|CHF|JPY)$/);
+  if (crypto) return `CURRENCY:${crypto[1]}${crypto[2]}`;
   return t;
 }
 
@@ -54,10 +79,13 @@ export async function fetchGoogleFinance(ticker: string): Promise<StooqDataPoint
   const symbol = toGoogleSymbol(ticker);
   const url = `${base}${base.includes('?') ? '&' : '?'}ticker=${encodeURIComponent(symbol)}`;
 
-  const res = await fetchWithTimeout(
-    url,
-    { cache: 'no-store', redirect: 'follow' },
-    'The Google Finance proxy'
+  const res = await oneAtATime(() =>
+    fetchWithTimeout(
+      url,
+      { cache: 'no-store', redirect: 'follow' },
+      'The Google Finance proxy',
+      GOOGLE_TIMEOUT_MS
+    )
   );
   if (res.status === 401 || res.status === 403) {
     throw new GoogleFinanceConfigError(

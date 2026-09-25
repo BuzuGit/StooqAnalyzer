@@ -94,6 +94,17 @@ async function yahooApiFetch(pathWithQuery: string): Promise<Response | null> {
   return lastRes;
 }
 
+/**
+ * Yahoo itself is unreachable or refusing — timeouts, network errors, 429, 5xx —
+ * as opposed to not having the ticker. Only this one is worth retrying elsewhere.
+ */
+export class YahooUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'YahooUnavailableError';
+  }
+}
+
 /** ISIN: 2-letter country code + 9 alphanumerics + 1 check digit. */
 export function isIsin(value: string): boolean {
   return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
@@ -108,7 +119,11 @@ async function resolveIsin(isin: string): Promise<string | null> {
   const res = await yahooApiFetch(
     `${YAHOO_SEARCH_PATH}?q=${encodeURIComponent(isin)}&quotesCount=1&newsCount=0`
   );
-  if (!res || !res.ok) return null;
+  // An outage mustn't read as "no such ISIN".
+  if (!res || (!res.ok && res.status !== 404)) {
+    throw new YahooUnavailableError(`Yahoo Finance didn't respond while looking up ISIN ${isin}.`);
+  }
+  if (!res.ok) return null;
   const json: YahooSearchResponse = await res.json();
   return json.quotes?.find((q) => q.symbol)?.symbol ?? null;
 }
@@ -161,10 +176,13 @@ interface YahooChartResponse {
 
 /**
  * Fetch daily history for a single exact Yahoo symbol.
- * Returns the OHLCV points, or null if the symbol has no usable daily history
- * (so the caller can try the next candidate).
+ * Returns the OHLCV points; 'not-found' if Yahoo has no usable daily history for
+ * it (so the caller can try the next candidate); or 'unavailable' if Yahoo didn't
+ * answer properly at all, in which case other candidates won't fare better.
  */
-async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null> {
+async function fetchYahooSymbol(
+  symbol: string
+): Promise<StooqDataPoint[] | 'not-found' | 'unavailable'> {
   // Use explicit period1/period2 (epoch seconds) rather than range=max:
   // range=max downsamples long histories to monthly bars, which breaks daily
   // indicators like the 50/200-day SMA. period1=0 forces true daily granularity.
@@ -174,16 +192,18 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
     `?period1=0&period2=${now}&interval=1d`;
 
   const response = await yahooApiFetch(path);
-  if (!response || !response.ok) return null; // 404/unavailable — try the next candidate
+  if (!response) return 'unavailable'; // every host failed at the network level
+  if (response.status === 404) return 'not-found';
+  if (!response.ok) return 'unavailable'; // 429/5xx on every host
 
   const json: YahooChartResponse = await response.json();
-  if (json.chart?.error) return null;
+  if (json.chart?.error) return 'not-found';
 
   const result = json.chart?.result?.[0];
   const timestamps = result?.timestamp;
   const quote = result?.indicators?.quote?.[0];
   const adjcloseArr = result?.indicators?.adjclose?.[0]?.adjclose;
-  if (!result || !timestamps || !quote || timestamps.length === 0) return null;
+  if (!result || !timestamps || !quote || timestamps.length === 0) return 'not-found';
 
   const data: StooqDataPoint[] = [];
   for (let i = 0; i < timestamps.length; i++) {
@@ -211,7 +231,7 @@ async function fetchYahooSymbol(symbol: string): Promise<StooqDataPoint[] | null
 
   // Need at least a couple of points to compute anything (also filters out
   // index symbols like WIG20.WA that only return a single live value).
-  if (data.length < 2) return null;
+  if (data.length < 2) return 'not-found';
 
   // Yahoo returns ascending order already, but guarantee it.
   data.sort((a, b) => a.date.localeCompare(b.date));
@@ -232,14 +252,22 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
       throw new Error(`Could not find ISIN ${isin} on Yahoo Finance.`);
     }
     const data = await fetchYahooSymbol(symbol);
-    if (data) return data;
+    if (Array.isArray(data)) return data;
+    if (data === 'unavailable') {
+      throw new YahooUnavailableError(`Yahoo Finance didn't respond for ISIN ${isin}.`);
+    }
     throw new Error(`No usable history on Yahoo Finance for ISIN ${isin} (symbol ${symbol}).`);
   }
 
   const candidates = yahooCandidates(ticker);
   for (const symbol of candidates) {
     const data = await fetchYahooSymbol(symbol);
-    if (data) return data;
+    if (Array.isArray(data)) return data;
+    // Yahoo is down, not missing the symbol — trying the other spellings would
+    // only wait out the same timeouts again.
+    if (data === 'unavailable') {
+      throw new YahooUnavailableError(`Yahoo Finance didn't respond for ${ticker}.`);
+    }
   }
   throw new Error(
     `No data available on Yahoo Finance for ${ticker} (tried: ${candidates.join(', ')}). ` +
