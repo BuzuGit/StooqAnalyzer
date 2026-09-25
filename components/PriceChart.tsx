@@ -351,7 +351,7 @@ export default function PriceChart({
       }
     }
     return niceLogAxisScale(values);
-  }, [logScale, drawdownData, displayData, tickers]);
+  }, [logScale, inPercent, drawdownData, displayData, tickers]);
 
   // Calculate SMA distance data for the distance chart
   const smaDistanceData = useMemo(() => {

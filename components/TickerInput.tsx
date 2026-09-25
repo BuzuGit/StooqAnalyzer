@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
+import { UNAVAILABLE_SOURCES } from '@/lib/sources';
 
 export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
 
@@ -38,24 +39,6 @@ const SOURCE_NOTES: Partial<Record<DataSource, string>> = {
   fred:
     'CPIAUCSL vs CPIAUCNS — the same BLS index: seasonally adjusted (smooths monthly noise, best for month-to-month moves, starts 1947) vs not adjusted (matches the BLS headline tables, starts 1913). Annual averages and YoY inflation are near-identical either way.',
 };
-
-/**
- * Sources that can't return data right now. Each stays selectable so the reason can be
- * read, but it replaces the usual description and Analyze is disabled.
- *
- * Stooq: since 2026 it refuses every CSV download without a valid API key, and the
- * app's key (April 2026) is refused too — even Stooq's own site now denies a person
- * who solved its CAPTCHA. Remove the entry once a working key is set in Vercel.
- */
-const UNAVAILABLE: Partial<Record<DataSource, string>> = {
-  stooq:
-    'Unavailable for now. Stooq refuses every data download that doesn’t carry a working Stooq API key, and the app’s key (from April 2026) is no longer accepted. Stooq has stopped handing out keys on its website — ask for one at www@stooq.com. For the same instruments, use Google (WSE:KGH, WSE:WIG20) or Yahoo (KGH.WA, USDPLN=X).',
-};
-
-/** False for a source switched off in UNAVAILABLE — nothing should try to load from it. */
-export function isSourceAvailable(source: DataSource): boolean {
-  return !UNAVAILABLE[source];
-}
 
 interface TickerInputProps {
   onSubmit: (tickers: string[], source: DataSource) => void;
@@ -154,7 +137,7 @@ export default function TickerInput({
     if (restoredValue !== undefined) setInputValue(restoredValue);
   }, [restoredValue]);
 
-  const unavailable = UNAVAILABLE[source];
+  const unavailable = UNAVAILABLE_SOURCES[source];
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -198,12 +181,12 @@ export default function TickerInput({
               type="button"
               onClick={() => onSourceChange(s)}
               disabled={isLoading}
-              title={UNAVAILABLE[s] ? 'Unavailable right now — select it to see why' : undefined}
+              title={UNAVAILABLE_SOURCES[s] ? 'Unavailable right now — select it to see why' : undefined}
               className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
                 source === s
                   ? 'bg-gray-700 text-white shadow-sm'
                   : 'text-muted hover:text-content'
-              } ${UNAVAILABLE[s] && source !== s ? 'opacity-50' : ''}`}
+              } ${UNAVAILABLE_SOURCES[s] && source !== s ? 'opacity-50' : ''}`}
             >
               {SOURCE_LABELS[s]}
             </button>

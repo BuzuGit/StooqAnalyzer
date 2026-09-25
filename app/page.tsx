@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import TickerInput, { DataSource, isSourceAvailable } from '@/components/TickerInput';
+import TickerInput, { DataSource } from '@/components/TickerInput';
+import { isSourceAvailable } from '@/lib/sources';
 import CaptchaModal from '@/components/CaptchaModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { PriceBasis, tickersWithBasis, hasAdjClose } from '@/lib/priceBasis';
@@ -137,6 +138,7 @@ export default function Home() {
     ) => {
       setIsLoading(true);
       setError(null);
+      setNotices([]);
 
       try {
         const params = new URLSearchParams({
