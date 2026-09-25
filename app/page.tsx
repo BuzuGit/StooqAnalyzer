@@ -260,6 +260,7 @@ export default function Home() {
         twelvedata: 'TwelveData',
         nbp: 'NBP',
         fred: 'FRED',
+        gus: 'GUS',
       };
       const { minDate, maxDate } = getDateRange(rawTickersData);
       const tickerPart = rawTickersData
@@ -617,6 +618,8 @@ export default function Home() {
               ? 'Google Finance examples: WSE:WIG20, WSE:ETFBM40TR (Warsaw), LON:VWRA (London), NYSEARCA:GLD (US), CURRENCY:BTCUSD. Via a Google Sheets proxy.'
               : source === 'fred'
               ? 'FRED examples: CPIAUCSL (US CPI), NASDAQCOM (index since 1971), M2SL (money supply), DGS10 (10y yield), UNRATE, GDPC1. Economic data, no API key.'
+              : source === 'gus'
+              ? 'GUS examples: CPI (price level since 1982), CPI_YOY (inflation % y/y), CPI_ANNUAL (since 1950). Official Statistics Poland data, no API key.'
               : source === 'nbp'
               ? 'NBP examples: USDPLN, EURPLN, CHFPLN (table A vs PLN), XAUPLN (gold, PLN per gram), EURUSD (cross), PLNUSD (inverse). Official rates, no API key.'
               : 'Stooq is unavailable for now (see the note above). The same instruments: WSE:KGH, WSE:WIG20 on Google; KGH.WA, USDPLN=X on Yahoo.'}
