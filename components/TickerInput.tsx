@@ -17,7 +17,7 @@ const SOURCE_INFO: Record<DataSource, string> = {
   yahoo:
     'Broadest coverage: global stocks, ETFs, FX, crypto, and European funds by ISIN. Includes adjusted close (Close/Adj-Close toggle). Unofficial API — occasionally flaky. Indices (e.g. WIG20) have no history — use a tracking ETF.',
   stooq:
-    'Global coverage incl. Polish listings and indices. Requires solving a CAPTCHA and is rate-limited per IP. No adjusted close. On Vercel it also needs a fixed proxy (STOOQ_PROXY_URL) — Stooq blocks Vercel’s datacenter IPs even after a solved CAPTCHA.',
+    'Global coverage incl. Polish listings and indices. Needs a working Stooq API key (STOOQ_API_KEY in Vercel) and may also ask for a CAPTCHA. Rate-limited per IP. No adjusted close.',
   twelvedata:
     'Stable official API (free API key set in Vercel). Free tier is US-only: US stocks & mutual funds work; no London/Warsaw listings, UCITS ETFs or ISINs. Raw prices only — its dividends feed (needed for adjusted close) is a paid endpoint, unlocked on the free tier for just a few sample symbols like AAPL, so Adj-Close mostly won’t appear. For adjusted close on any asset, use Yahoo. ~20y history, rate-limited.',
   google:
@@ -32,6 +32,19 @@ const SOURCE_INFO: Record<DataSource, string> = {
 const SOURCE_NOTES: Partial<Record<DataSource, string>> = {
   fred:
     'CPIAUCSL vs CPIAUCNS — the same BLS index: seasonally adjusted (smooths monthly noise, best for month-to-month moves, starts 1947) vs not adjusted (matches the BLS headline tables, starts 1913). Annual averages and YoY inflation are near-identical either way.',
+};
+
+/**
+ * Sources that can't return data right now. Each stays selectable so the reason can be
+ * read, but it replaces the usual description and Analyze is disabled.
+ *
+ * Stooq: since 2026 it refuses every CSV download without a valid API key, and the
+ * app's key (April 2026) is refused too — even Stooq's own site now denies a person
+ * who solved its CAPTCHA. Remove the entry once a working key is set in Vercel.
+ */
+const UNAVAILABLE: Partial<Record<DataSource, string>> = {
+  stooq:
+    'Unavailable for now. Stooq refuses every data download that doesn’t carry a working Stooq API key, and the app’s key (from April 2026) is no longer accepted. Stooq has stopped handing out keys on its website — ask for one at www@stooq.com. For the same instruments, use Google (WSE:KGH, WSE:WIG20) or Yahoo (KGH.WA, USDPLN=X).',
 };
 
 interface TickerInputProps {
@@ -117,8 +130,11 @@ export default function TickerInput({
 }: TickerInputProps) {
   const [inputValue, setInputValue] = useState('');
 
+  const unavailable = UNAVAILABLE[source];
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (unavailable) return;
     const tickers = inputValue
       .split(',')
       .map(t => t.trim())
@@ -156,11 +172,12 @@ export default function TickerInput({
               type="button"
               onClick={() => onSourceChange(s)}
               disabled={isLoading}
+              title={UNAVAILABLE[s] ? 'Unavailable right now — select it to see why' : undefined}
               className={`px-3 py-1 text-sm rounded-md font-medium transition-colors disabled:cursor-not-allowed ${
                 source === s
                   ? 'bg-gray-700 text-white shadow-sm'
                   : 'text-muted hover:text-content'
-              }`}
+              } ${UNAVAILABLE[s] && source !== s ? 'opacity-50' : ''}`}
             >
               {SOURCE_LABELS[s]}
             </button>
@@ -168,8 +185,12 @@ export default function TickerInput({
         </div>
       </div>
 
-      {/* Per-source coverage & limitations */}
-      <p className="mb-3 text-xs text-muted">{SOURCE_INFO[source]}</p>
+      {/* Per-source coverage & limitations — or why the source is switched off */}
+      {unavailable ? (
+        <p className="mb-3 text-xs font-medium text-amber-700 dark:text-amber-300">{unavailable}</p>
+      ) : (
+        <p className="mb-3 text-xs text-muted">{SOURCE_INFO[source]}</p>
+      )}
 
       <form onSubmit={handleSubmit} className="flex gap-3">
         <div className="flex-1">
@@ -184,7 +205,7 @@ export default function TickerInput({
         </div>
         <button
           type="submit"
-          disabled={isLoading || inputValue.trim().length === 0}
+          disabled={isLoading || inputValue.trim().length === 0 || !!unavailable}
           className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
         >
           {isLoading ? (
@@ -212,19 +233,21 @@ export default function TickerInput({
           )}
         </button>
       </form>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="text-sm text-muted">Quick examples:</span>
-        {examples.map((example) => (
-          <button
-            key={example.value}
-            type="button"
-            onClick={() => setInputValue(example.value)}
-            className="text-sm px-3 py-1 bg-panel-2 hover:bg-panel-3 rounded-full text-content transition-colors"
-          >
-            {example.label}
-          </button>
-        ))}
-      </div>
+      {!unavailable && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="text-sm text-muted">Quick examples:</span>
+          {examples.map((example) => (
+            <button
+              key={example.value}
+              type="button"
+              onClick={() => setInputValue(example.value)}
+              className="text-sm px-3 py-1 bg-panel-2 hover:bg-panel-3 rounded-full text-content transition-colors"
+            >
+              {example.label}
+            </button>
+          ))}
+        </div>
+      )}
       {SOURCE_NOTES[source] && (
         <p className="mt-2 text-xs text-subtle">{SOURCE_NOTES[source]}</p>
       )}
