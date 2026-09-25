@@ -554,7 +554,7 @@ export default function Home() {
               ? 'FRED examples: CPIAUCSL (US CPI), NASDAQCOM (index since 1971), M2SL (money supply), DGS10 (10y yield), UNRATE, GDPC1. Economic data, no API key.'
               : source === 'nbp'
               ? 'NBP examples: USDPLN, EURPLN, CHFPLN (table A vs PLN), XAUPLN (gold, PLN per gram), EURUSD (cross), PLNUSD (inverse). Official rates, no API key.'
-              : 'Stooq examples: USDPLN (currencies), IWDA.UK (ETFs), WIG20 (Polish index), BTC.V (crypto)'}
+              : 'Stooq is unavailable for now (see the note above). The same instruments: WSE:KGH, WSE:WIG20 on Google; KGH.WA, USDPLN=X on Yahoo.'}
           </p>
         </footer>
       </div>
