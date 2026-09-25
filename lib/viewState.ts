@@ -26,7 +26,7 @@ export interface ViewState {
   focus?: string;
 }
 
-const SOURCES: DataSource[] = ['yahoo', 'stooq', 'twelvedata', 'google', 'nbp', 'fred'];
+const SOURCES: DataSource[] = ['yahoo', 'stooq', 'twelvedata', 'google', 'nbp', 'fred', 'gus'];
 const VIEWS: ChartView[] = ['price', 'percent', 'drawdown'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Same cap the data API enforces. */

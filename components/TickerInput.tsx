@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 
-export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred';
+export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   stooq: 'Stooq',
@@ -11,6 +11,7 @@ const SOURCE_LABELS: Record<DataSource, string> = {
   google: 'Google',
   nbp: 'NBP',
   fred: 'FRED',
+  gus: 'GUS',
 };
 
 const SOURCE_INFO: Record<DataSource, string> = {
@@ -24,12 +25,16 @@ const SOURCE_INFO: Record<DataSource, string> = {
     'Google Finance via a Google Sheets (GOOGLEFINANCE) proxy — needs the Apps Script web app deployed and GOOGLE_FINANCE_URL set in Vercel. Use Google-native symbols: exchange-prefixed like WSE:WIG20, LON:VWRA, NYSEARCA:GLD; FX/crypto as CURRENCY:USDPLN, CURRENCY:BTCUSD. Covers global stocks/ETFs/indices. Raw prices only (no adjusted close). Slower (queries a live spreadsheet).',
   fred:
     'Federal Reserve Economic Data (St. Louis Fed) — free, no API key. Enter a FRED series ID from the series page URL (fred.stlouisfed.org/series/CPIAUCSL → CPIAUCSL). ~800k economic series with very long history: US CPI to 1947, Nasdaq Composite to 1971, Fed funds to 1954. Economic data, not market prices — one observation per period (daily, monthly or quarterly), so there is no OHLC range, no volume and no adjusted close. Note that CAGR, Growth of $1 and drawdown only make sense for level/index series like CPIAUCSL, SP500 or M2SL; for rates and percentages (DGS10, UNRATE) the chart is correct but those ratio statistics are not. FRED’s own SP500 series is licence-limited to the last 10 years — use NASDAQCOM for a long index history.',
+  gus:
+    'Statistics Poland (GUS) — the official Polish consumer price index (inflation). Free, no API key: read from the history files GUS publishes on stat.gov.pl (CC BY 4.0). Monthly from January 1982, annual from 1950. CPI and CPI_ANNUAL are price levels chained from GUS’s month-on-month / year-on-year indices (the period before the first = 100), so their CAGR is the average inflation rate and their chart shows what money lost. CPI_YOY, CPI_MOM and CPI_ANNUAL_YOY are inflation rates in % — the chart is right, but CAGR, growth and drawdown don’t apply to a rate. One value per month or year, so there is no OHLC range, no volume and no adjusted close.',
   nbp:
     'Official National Bank of Poland reference rates — free, no API key, no CAPTCHA and no IP blocking. Table A mid rates for 32 currencies against PLN, every business day since 2002-01-02, plus the NBP gold fixing (XAUPLN = PLN per gram) since 2013-01-02. Write pairs as USDPLN; PLNUSD inverts, and any two codes cross via their PLN legs (EURUSD, XAUUSD). FX and gold only — no stocks, ETFs or indices. One fixing per day, so there is no OHLC range, no volume and no adjusted close.',
 };
 
 /** Optional footnote under the example chips, where a pair of them needs disambiguating. */
 const SOURCE_NOTES: Partial<Record<DataSource, string>> = {
+  gus:
+    'CPI vs CPI_ANNUAL — the same index at two frequencies: monthly (from 1982, shows the path within each year) vs annual averages (from 1950, reaches back through the 1990 hyperinflation to the postwar years). A log scale makes the pre-1995 decades readable.',
   fred:
     'CPIAUCSL vs CPIAUCNS — the same BLS index: seasonally adjusted (smooths monthly noise, best for month-to-month moves, starts 1947) vs not adjusted (matches the BLS headline tables, starts 1913). Annual averages and YoY inflation are near-identical either way.',
 };
@@ -112,6 +117,13 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'PLNUSD (inverse)', value: 'PLNUSD' },
     { label: 'USD vs EUR vs CHF', value: 'USDPLN,EURPLN,CHFPLN' },
   ],
+  gus: [
+    { label: 'CPI (price level, monthly since 1982)', value: 'CPI' },
+    { label: 'CPI_YOY (inflation, % y/y)', value: 'CPI_YOY' },
+    { label: 'CPI_MOM (inflation, % m/m)', value: 'CPI_MOM' },
+    { label: 'CPI_ANNUAL (price level since 1950)', value: 'CPI_ANNUAL' },
+    { label: 'CPI_ANNUAL_YOY (annual inflation since 1950)', value: 'CPI_ANNUAL_YOY' },
+  ],
   fred: [
     { label: 'CPIAUCSL (US CPI, seas. adj.)', value: 'CPIAUCSL' },
     { label: 'CPIAUCNS (US CPI, not adj.)', value: 'CPIAUCNS' },
@@ -170,6 +182,8 @@ export default function TickerInput({
       ? 'Enter NBP pairs (e.g., USDPLN, EURPLN, XAUPLN, EURUSD)'
       : source === 'fred'
       ? 'Enter FRED series IDs (e.g., CPIAUCSL, NASDAQCOM, M2SL, DGS10)'
+      : source === 'gus'
+      ? 'Enter GUS series (CPI, CPI_YOY, CPI_MOM, CPI_ANNUAL, CPI_ANNUAL_YOY)'
       : 'Enter tickers (e.g., USDPLN, IWDA.UK, WIG20)';
 
   return (
@@ -178,7 +192,7 @@ export default function TickerInput({
       <div className="mb-3 flex items-center gap-3">
         <span className="text-sm font-medium text-content">Data source:</span>
         <div className="inline-flex rounded-lg border border-line p-0.5 bg-panel-2">
-          {(['yahoo', 'stooq', 'twelvedata', 'google', 'nbp', 'fred'] as DataSource[]).map((s) => (
+          {(['yahoo', 'stooq', 'twelvedata', 'google', 'nbp', 'gus', 'fred'] as DataSource[]).map((s) => (
             <button
               key={s}
               type="button"

@@ -10,9 +10,10 @@ import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
 import { fetchGoogleFinance, GoogleFinanceConfigError } from '@/lib/googlefinance';
 import { fetchNbpData, NbpTickerError } from '@/lib/nbp';
 import { fetchFredData, FredSeriesError } from '@/lib/fred';
+import { fetchGusData, GusSeriesError } from '@/lib/gus';
 import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
 
-type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred';
+type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest) {
       ? 'nbp'
       : rawSource === 'fred'
       ? 'fred'
+      : rawSource === 'gus'
+      ? 'gus'
       : 'yahoo';
   const sessionToken = searchParams.get('session') || undefined;
 
@@ -68,6 +71,9 @@ export async function GET(request: NextRequest) {
       datasets = await Promise.all(tickers.map((ticker) => fetchTwelveData(ticker)));
     } else if (source === 'fred') {
       datasets = await Promise.all(tickers.map((ticker) => fetchFredData(ticker)));
+    } else if (source === 'gus') {
+      // Tickers share one file per frequency, downloaded once (see lib/gus).
+      datasets = await Promise.all(tickers.map((ticker) => fetchGusData(ticker)));
     } else if (source === 'nbp') {
       // Each pair already fans out ~25 windowed requests internally, so keep the
       // tickers themselves sequential rather than multiplying that against NBP.
@@ -131,7 +137,8 @@ export async function GET(request: NextRequest) {
       error instanceof TwelveDataConfigError ||
       error instanceof GoogleFinanceConfigError ||
       error instanceof NbpTickerError ||
-      error instanceof FredSeriesError
+      error instanceof FredSeriesError ||
+      error instanceof GusSeriesError
     ) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: error.message },
