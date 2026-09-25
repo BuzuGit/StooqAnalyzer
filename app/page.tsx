@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
-import TickerInput, { DataSource } from '@/components/TickerInput';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import TickerInput, { DataSource, isSourceAvailable } from '@/components/TickerInput';
 import CaptchaModal from '@/components/CaptchaModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import { PriceBasis, tickersWithBasis, hasAdjClose } from '@/lib/priceBasis';
@@ -15,6 +15,7 @@ import ReturnsTable from '@/components/ReturnsTable';
 import MonthEndPriceTable from '@/components/MonthEndPriceTable';
 import CorrelationTable from '@/components/CorrelationTable';
 import { TickerData, ChartDataPoint, Statistics, ApiResponse } from '@/lib/types';
+import { ViewState, viewToQuery, viewFromQuery, saveLastView, loadLastView } from '@/lib/viewState';
 import {
   calculateStatistics,
   normalizeDataForChart,
@@ -53,6 +54,9 @@ export default function Home() {
   const [chartView, setChartView] = useState<ChartView>('price');
   // Linear (default) or logarithmic Y axis on the price chart.
   const [logScale, setLogScale] = useState(false);
+
+  // Tickers of a view restored from a link or the last visit, echoed into the input box.
+  const [restoredTickers, setRestoredTickers] = useState<string | undefined>(undefined);
 
   // Stooq CAPTCHA flow state
   const [stooqSession, setStooqSession] = useState<string | null>(null);
@@ -120,8 +124,15 @@ export default function Home() {
 
   // Core loader. For Stooq it may return a "captcha required" result, in which
   // case we open the CAPTCHA modal and retry once solved (see handleCaptchaSolved).
+  // `restore` carries the dates and focus of a view being reopened; they can only be
+  // applied once the data is in, since they have to fit the dates it actually covers.
   const loadTickers = useCallback(
-    async (tickers: string[], selectedSource: DataSource, sessionToken?: string | null) => {
+    async (
+      tickers: string[],
+      selectedSource: DataSource,
+      sessionToken?: string | null,
+      restore?: ViewState
+    ) => {
       setIsLoading(true);
       setError(null);
 
@@ -152,11 +163,17 @@ export default function Home() {
         const data = result.data;
         setRawTickersData(data);
         setDataSource(selectedSource);
-        setFocusedTickerIndex(0);
+        const focus = restore?.focus?.toUpperCase();
+        const focusIdx = focus ? data.findIndex((t) => t.ticker === focus) : -1;
+        setFocusedTickerIndex(Math.max(focusIdx, 0));
 
         const { minDate, maxDate } = getDateRange(data);
         setAvailableDateRange({ minDate, maxDate });
-        setDateRange({ start: minDate, end: maxDate });
+        // A restored range is clamped to what this data covers; one that no longer
+        // fits at all (dates swapped or entirely outside) falls back to everything.
+        const start = restore?.from && restore.from > minDate ? restore.from : minDate;
+        const end = restore?.to && restore.to < maxDate ? restore.to : maxDate;
+        setDateRange(start <= end ? { start, end } : { start: minDate, end: maxDate });
       } catch (err) {
         console.error('Error:', err);
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -169,6 +186,23 @@ export default function Home() {
     },
     []
   );
+
+  // On open, reproduce the view named in the address — or, with none, the last one
+  // from this browser. Runs once (the ref stops React's dev double-invoke loading twice).
+  const restoredOnce = useRef(false);
+  useEffect(() => {
+    if (restoredOnce.current) return;
+    restoredOnce.current = true;
+    const view = viewFromQuery(window.location.search) ?? loadLastView();
+    if (!view) return;
+    setSource(view.source);
+    setChartView(view.view ?? 'price');
+    setLogScale(!!view.log);
+    setPriceBasis(view.basis ?? 'close');
+    setRestoredTickers(view.tickers.join(', '));
+    // A source switched off since the view was saved: show its notice, load nothing.
+    if (isSourceAvailable(view.source)) loadTickers(view.tickers, view.source, null, view);
+  }, [loadTickers]);
 
   const handleSubmit = (tickers: string[], selectedSource: DataSource) => {
     loadTickers(tickers, selectedSource, stooqSession);
@@ -267,6 +301,35 @@ export default function Home() {
   const focusedData = filteredTickersData[focusedIdx]?.data || [];
   const rawFocusedData = basisTickersData[focusedIdx]?.data || [];
 
+  // The current view as a query string — '' until something is loaded. Dates equal to
+  // the data's own ends are left out, so "Max" stays "Max" as new prices arrive.
+  const shareQuery = useMemo(() => {
+    if (rawTickersData.length === 0) return '';
+    return viewToQuery({
+      tickers: rawTickersData.map((t) => t.ticker),
+      source: dataSource,
+      from:
+        dateRange.start && dateRange.start !== availableDateRange.minDate ? dateRange.start : undefined,
+      to: dateRange.end && dateRange.end !== availableDateRange.maxDate ? dateRange.end : undefined,
+      view: chartView,
+      log: logScale,
+      basis: priceBasis,
+      focus: focusedIdx > 0 ? rawTickersData[focusedIdx]?.ticker : undefined,
+    });
+  }, [rawTickersData, dataSource, dateRange, availableDateRange, chartView, logScale, priceBasis, focusedIdx]);
+
+  // Keep the address and the remembered view in step with the screen. Only once data
+  // is in — while a restored view is still loading, its address must stay intact.
+  useEffect(() => {
+    if (!shareQuery || isLoading) return;
+    window.history.replaceState(null, '', `${window.location.pathname}?${shareQuery}`);
+    saveLastView(shareQuery);
+  }, [shareQuery, isLoading]);
+
+  const shareUrl = shareQuery
+    ? `${window.location.origin}${window.location.pathname}?${shareQuery}`
+    : undefined;
+
   return (
     <main className="min-h-screen bg-app">
       {/* Stooq CAPTCHA modal */}
@@ -301,6 +364,7 @@ export default function Home() {
           isLoading={isLoading}
           source={source}
           onSourceChange={setSource}
+          restoredValue={restoredTickers}
         />
 
         {/* Date Range Filter - Only show when data is loaded */}
@@ -314,6 +378,7 @@ export default function Home() {
             disabled={isLoading}
             onDownloadExcel={handleDownloadExcel}
             isDownloading={isDownloading}
+            shareUrl={shareUrl}
           />
         )}
 

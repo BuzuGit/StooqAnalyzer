@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 
 export type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred';
 
@@ -47,11 +47,18 @@ const UNAVAILABLE: Partial<Record<DataSource, string>> = {
     'Unavailable for now. Stooq refuses every data download that doesn’t carry a working Stooq API key, and the app’s key (from April 2026) is no longer accepted. Stooq has stopped handing out keys on its website — ask for one at www@stooq.com. For the same instruments, use Google (WSE:KGH, WSE:WIG20) or Yahoo (KGH.WA, USDPLN=X).',
 };
 
+/** False for a source switched off in UNAVAILABLE — nothing should try to load from it. */
+export function isSourceAvailable(source: DataSource): boolean {
+  return !UNAVAILABLE[source];
+}
+
 interface TickerInputProps {
   onSubmit: (tickers: string[], source: DataSource) => void;
   isLoading: boolean;
   source: DataSource;
   onSourceChange: (source: DataSource) => void;
+  /** Tickers of a view restored from a link or the last visit, shown in the box. */
+  restoredValue?: string;
 }
 
 const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
@@ -127,8 +134,13 @@ export default function TickerInput({
   isLoading,
   source,
   onSourceChange,
+  restoredValue,
 }: TickerInputProps) {
   const [inputValue, setInputValue] = useState('');
+
+  useEffect(() => {
+    if (restoredValue !== undefined) setInputValue(restoredValue);
+  }, [restoredValue]);
 
   const unavailable = UNAVAILABLE[source];
 

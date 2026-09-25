@@ -2,6 +2,27 @@
 
 import { useState, useEffect } from 'react';
 
+/**
+ * Copy through a temporary selection — the pre-Clipboard-API route. Still allowed in
+ * many embedded browsers that refuse navigator.clipboard. True if it worked.
+ */
+function copyBySelection(text: string): boolean {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    area.remove();
+  }
+}
+
 interface DateRangeFilterProps {
   minDate: string;
   maxDate: string;
@@ -11,6 +32,8 @@ interface DateRangeFilterProps {
   disabled?: boolean;
   onDownloadExcel?: () => void;
   isDownloading?: boolean;
+  /** Address of the current view; shows a button that copies it. */
+  shareUrl?: string;
 }
 
 export default function DateRangeFilter({
@@ -22,9 +45,27 @@ export default function DateRangeFilter({
   disabled = false,
   onDownloadExcel,
   isDownloading = false,
+  shareUrl,
 }: DateRangeFilterProps) {
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  // The page keeps the address bar in step with the view, so when no copy route is
+  // allowed (some in-app browsers block both, and prompt() too) the honest fallback
+  // is pointing there — the same link is already sitting in it.
+  const handleCopyLink = async () => {
+    if (!shareUrl) return;
+    let ok: boolean;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      ok = true;
+    } catch {
+      ok = copyBySelection(shareUrl);
+    }
+    setCopyState(ok ? 'copied' : 'failed');
+    setTimeout(() => setCopyState('idle'), ok ? 2000 : 4000);
+  };
 
   useEffect(() => {
     setLocalStart(startDate);
@@ -156,6 +197,24 @@ export default function DateRangeFilter({
               {preset.label}
             </button>
           ))}
+
+          {shareUrl && (
+            <button
+              onClick={handleCopyLink}
+              disabled={disabled}
+              title="Copy a link to exactly this view — tickers, source, dates and chart settings"
+              className="ml-1 inline-flex items-center gap-1 px-3 py-1 text-xs bg-panel-2 hover:bg-panel-3 text-content rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5M14 10a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5" />
+              </svg>
+              {copyState === 'copied'
+                ? 'Copied!'
+                : copyState === 'failed'
+                ? 'Copy it from the address bar'
+                : 'Copy link'}
+            </button>
+          )}
 
           {onDownloadExcel && (
             <button
