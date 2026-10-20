@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { Redis } from '@upstash/redis';
+import { cookies } from 'next/headers';
 
 /**
  * A Stooq browsing session: a cookie jar plus whether the human CAPTCHA has been
@@ -7,8 +7,15 @@ import { Redis } from '@upstash/redis';
  * submit answer → download), and on Vercel those requests hit different, isolated
  * serverless functions — so in-memory state does NOT work there.
  *
- * When Upstash/Vercel-KV Redis env vars are present we use Redis (required on
- * Vercel). Otherwise we fall back to an in-memory Map for local `npm run dev`.
+ * It travels in an HttpOnly cookie on the app's own domain, so the browser hands it
+ * back with every same-origin request — the data fetch, the CAPTCHA <img>, the
+ * answer POST — and any function instance can pick it up. It holds only Stooq's
+ * anonymous visitor cookies (~400 bytes encoded), nothing of ours worth hiding: a
+ * visitor who edits it only affects their own Stooq requests.
+ *
+ * This replaced an Upstash Redis store, which was one more service to keep alive —
+ * once its database stopped answering, every Stooq request died with a bare
+ * "fetch failed" before Stooq was ever contacted.
  */
 export interface StooqSession {
   token: string;
@@ -17,27 +24,8 @@ export interface StooqSession {
   createdAt: number;
 }
 
-const TTL_SECONDS = 30 * 60; // 30 minutes
-
-// Support both Vercel KV (KV_REST_API_*) and direct Upstash (UPSTASH_REDIS_REST_*).
-const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
-
-/** True when a shared session store is configured (i.e. Stooq can work on Vercel). */
-export function hasSharedSessionStore(): boolean {
-  return redis !== null;
-}
-
-// In-memory fallback for local dev only.
-const globalForSessions = globalThis as unknown as {
-  __stooqSessions?: Map<string, StooqSession>;
-};
-const MEM: Map<string, StooqSession> =
-  globalForSessions.__stooqSessions ?? new Map<string, StooqSession>();
-globalForSessions.__stooqSessions = MEM;
-
-const redisKey = (token: string) => `stooq:session:${token}`;
+const TTL_SECONDS = 30 * 60; // 30 minutes, refreshed on every save
+const COOKIE_NAME = 'stooq_session';
 
 export function newSession(): StooqSession {
   return {
@@ -48,13 +36,19 @@ export function newSession(): StooqSession {
   };
 }
 
-/** Persist a session (upsert) with a sliding TTL. Call after mutating cookies/unlocked. */
+/**
+ * Persist a session (upsert) with a sliding TTL. Call after mutating cookies/unlocked.
+ * Only valid inside a route handler — it writes to the outgoing response.
+ */
 export async function saveSession(session: StooqSession): Promise<void> {
-  if (redis) {
-    await redis.set(redisKey(session.token), session, { ex: TTL_SECONDS });
-  } else {
-    MEM.set(session.token, session);
-  }
+  cookies().set(COOKIE_NAME, Buffer.from(JSON.stringify(session)).toString('base64url'), {
+    httpOnly: true,
+    sameSite: 'lax',
+    // Plain http on localhost would drop a Secure cookie.
+    secure: process.env.NODE_ENV === 'production',
+    path: '/api/stooq',
+    maxAge: TTL_SECONDS,
+  });
 }
 
 export async function createSession(): Promise<StooqSession> {
@@ -63,17 +57,17 @@ export async function createSession(): Promise<StooqSession> {
   return session;
 }
 
+/** The session the browser sent back, if it is the one `token` names. */
 export async function getSession(token: string): Promise<StooqSession | undefined> {
-  if (redis) {
-    const data = await redis.get<StooqSession>(redisKey(token));
-    return data ?? undefined;
+  const raw = cookies().get(COOKIE_NAME)?.value;
+  if (!raw) return undefined;
+  try {
+    const session = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as StooqSession;
+    // A token mismatch means an older session is still in the browser — not this one.
+    return session.token === token ? session : undefined;
+  } catch {
+    return undefined; // malformed cookie: treat as no session
   }
-  const session = MEM.get(token);
-  if (session && Date.now() - session.createdAt > TTL_SECONDS * 1000) {
-    MEM.delete(token);
-    return undefined;
-  }
-  return session;
 }
 
 export function serializeCookies(session: StooqSession): string {
