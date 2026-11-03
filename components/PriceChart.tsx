@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   ComposedChart,
   Area,
@@ -188,6 +188,24 @@ export default function PriceChart({
   const [show50SMA, setShow50SMA] = useState(false);
   const [show200SMA, setShow200SMA] = useState(false);
   const [distanceSMAPeriod, setDistanceSMAPeriod] = useState<50 | 200>(200);
+  // The whole card blown up to fill the browser window, for a closer look.
+  const [expanded, setExpanded] = useState(false);
+  const isExpanded = expanded && data.length > 0;
+
+  // While expanded, Esc closes it and the page underneath stops scrolling.
+  useEffect(() => {
+    if (!isExpanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isExpanded]);
 
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
@@ -551,45 +569,78 @@ export default function PriceChart({
   const showPriceChartXAxis = !hasDrawdown;
 
   return (
-    <div className="bg-panel rounded-lg shadow-md p-4">
+    <div
+      className={
+        isExpanded
+          ? 'fixed inset-0 z-40 flex flex-col overflow-y-auto bg-panel p-4 [&>*]:shrink-0'
+          : 'bg-panel rounded-lg shadow-md p-4'
+      }
+    >
       <div className="mb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold text-content">
-            {isSingleTicker
-              ? `${primaryTicker} ${inPercent ? 'Return' : 'Price'} & Drawdown`
-              : inPercent
-              ? 'Normalized Comparison (% from start)'
-              : 'Normalized Comparison (Base = 100)'}
-            {isSingleTicker && periodCagr && (
-              <span className="ml-2 text-sm font-semibold text-content">
-                (Period: {periodCagr.period} | CAGR: {periodCagr.cagr})
-              </span>
+        <div className="flex items-start gap-2">
+          <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-content">
+              {isSingleTicker
+                ? `${primaryTicker} ${inPercent ? 'Return' : 'Price'} & Drawdown`
+                : inPercent
+                ? 'Normalized Comparison (% from start)'
+                : 'Normalized Comparison (Base = 100)'}
+              {isSingleTicker && periodCagr && (
+                <span className="ml-2 text-sm font-semibold text-content">
+                  (Period: {periodCagr.period} | CAGR: {periodCagr.cagr})
+                </span>
+              )}
+            </h2>
+            {isSingleTicker && (
+              <div className="flex gap-1 ml-2">
+                <button
+                  onClick={() => setShow50SMA(!show50SMA)}
+                  className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                    show50SMA
+                      ? 'bg-red-100 text-red-700 border border-red-300'
+                      : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
+                  }`}
+                >
+                  50SMA
+                </button>
+                <button
+                  onClick={() => setShow200SMA(!show200SMA)}
+                  className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                    show200SMA
+                      ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                      : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
+                  }`}
+                >
+                  200SMA
+                </button>
+              </div>
             )}
-          </h2>
-          {isSingleTicker && (
-            <div className="flex gap-1 ml-2">
-              <button
-                onClick={() => setShow50SMA(!show50SMA)}
-                className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                  show50SMA
-                    ? 'bg-red-100 text-red-700 border border-red-300'
-                    : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
-                }`}
-              >
-                50SMA
-              </button>
-              <button
-                onClick={() => setShow200SMA(!show200SMA)}
-                className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                  show200SMA
-                    ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                    : 'bg-panel-2 text-muted border border-line hover:bg-panel-3'
-                }`}
-              >
-                200SMA
-              </button>
-            </div>
-          )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            title={isExpanded ? 'Close full window (Esc)' : 'Expand to full window'}
+            aria-label={isExpanded ? 'Close full window' : 'Expand to full window'}
+            className="shrink-0 p-1 rounded text-muted hover:text-content hover:bg-panel-2 transition-colors"
+          >
+            <svg
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path
+                d={
+                  isExpanded
+                    ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'
+                    : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'
+                }
+              />
+            </svg>
+          </button>
         </div>
         {!isSingleTicker && (
           <p className="text-sm text-muted">
@@ -610,7 +661,8 @@ export default function PriceChart({
         )}
       </div>
 
-      <div className={hasDrawdown ? "h-80" : "h-96"}>
+      {/* Expanded, the price chart takes whatever height the two charts below leave. */}
+      <div className={isExpanded ? 'flex-1 min-h-[20rem]' : hasDrawdown ? "h-80" : "h-96"}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={drawdownData ?? displayData}
