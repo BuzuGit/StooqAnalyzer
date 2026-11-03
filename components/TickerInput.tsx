@@ -71,6 +71,7 @@ const EXAMPLES: Record<DataSource, { label: string; value: string }[]> = {
     { label: 'CSPX.L', value: 'CSPX.L' },
     { label: 'AAPL', value: 'AAPL' },
     { label: 'GLD', value: 'GLD' },
+    { label: 'GC=F', value: 'GC=F' },
     { label: 'QQQ', value: 'QQQ' },
     { label: 'ES3.SI', value: 'ES3.SI' },
   ],
