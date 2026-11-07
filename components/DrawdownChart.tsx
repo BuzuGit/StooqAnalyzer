@@ -34,6 +34,8 @@ interface DrawdownChartProps {
   tickCount?: number;
   resolvedTicks?: string[];
   multiData?: MultiDrawdownData[];
+  /** In the price chart's full-window view: grow with the spare height instead of a fixed one. */
+  expanded?: boolean;
 }
 
 // Custom label for max drawdown point
@@ -113,6 +115,7 @@ export default function DrawdownChart({
   tickCount = 8,
   resolvedTicks,
   multiData,
+  expanded = false,
 }: DrawdownChartProps) {
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
@@ -169,7 +172,7 @@ export default function DrawdownChart({
   const xAxisHeight = (!isShortRange && !isLongRange) ? 35 : undefined;
 
   return (
-    <div className="h-44">
+    <div className={expanded ? 'flex-[1_1_11rem] min-h-[11rem]' : 'h-44'}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={isMulti ? mergedMultiData : data}
