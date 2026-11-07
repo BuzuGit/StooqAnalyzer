@@ -687,8 +687,10 @@ export default function PriceChart({
         )}
       </div>
 
-      {/* Expanded, the price chart takes whatever height the two charts below leave. */}
-      <div className={isExpanded ? 'flex-1 min-h-[20rem]' : hasDrawdown ? "h-80" : "h-96"}>
+      {/* Expanded, the price chart and the drawdown chart below split the spare
+          height 4:1 — the price chart ends up at 80% of what it would get alone,
+          and the drawdown chart grows by the rest. */}
+      <div className={isExpanded ? 'flex-[4_1_0%] min-h-[20rem]' : hasDrawdown ? "h-80" : "h-96"}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={drawdownData ?? displayData}
@@ -970,6 +972,7 @@ export default function PriceChart({
           isLongRange={isLongRange}
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
+          expanded={isExpanded}
         />
       )}
 
@@ -985,6 +988,7 @@ export default function PriceChart({
           tickCount={tickCount}
           resolvedTicks={resolvedTicks}
           multiData={multiDrawdownData}
+          expanded={isExpanded}
         />
       )}
 
