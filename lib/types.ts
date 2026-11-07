@@ -9,7 +9,20 @@ export interface StooqDataPoint {
   adjClose?: number;
 }
 
-export interface TickerData {
+/** What an asset is, as far as its source says. Either part may be missing. */
+export interface AssetName {
+  /** Full name, e.g. "iShares Edge MSCI World Momentum Factor UCITS ETF USD (Acc)". */
+  name?: string;
+  /** The symbol the source filed it under, e.g. IWMO.L for a typed IWMO.UK. */
+  symbol?: string;
+}
+
+/** A downloaded history plus its name. */
+export interface Series extends AssetName {
+  data: StooqDataPoint[];
+}
+
+export interface TickerData extends AssetName {
   ticker: string;
   data: StooqDataPoint[];
 }

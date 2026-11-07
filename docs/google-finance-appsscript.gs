@@ -37,6 +37,9 @@ function doGet(e) {
     sheet.getRange('A1').setFormula(
       '=GOOGLEFINANCE("' + ticker + '","all",DATE(1990,1,1),TODAY(),"DAILY")'
     );
+    // The full name, for the chart heading, in a cell clear of the history that
+    // spills from A1. Some symbols have none (#N/A), which reads as no name.
+    sheet.getRange('H1').setFormula('=IFERROR(GOOGLEFINANCE("' + ticker + '","name"),"")');
     SpreadsheetApp.flush();
 
     // GOOGLEFINANCE may need a moment to populate the range.
@@ -50,6 +53,7 @@ function doGet(e) {
       return out({ error: 'no data for ' + ticker });
     }
 
+    var name = String(sheet.getRange('H1').getValue() || '').trim();
     var tz = ss.getSpreadsheetTimeZone();
     var rows = [];
     for (var i = 1; i < values.length; i++) {
@@ -64,7 +68,7 @@ function doGet(e) {
         volume: values[i][5]
       });
     }
-    return out({ ticker: ticker, rows: rows });
+    return out({ ticker: ticker, name: name, rows: rows });
   } catch (err) {
     return out({ error: String(err) });
   } finally {

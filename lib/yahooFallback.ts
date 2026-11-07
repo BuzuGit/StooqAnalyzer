@@ -1,4 +1,4 @@
-import { StooqDataPoint } from './types';
+import { Series } from './types';
 import { fetchYahooData, isIsin, yahooCandidates, YahooUnavailableError } from './yahoo';
 import { fetchGoogleFinance, toGoogleSymbol } from './googlefinance';
 
@@ -22,8 +22,7 @@ export function googleStandIn(ticker: string): string | null {
   return symbol.includes(':') || /^[A-Z]{1,6}$/.test(symbol) ? symbol : null;
 }
 
-export interface FallbackResult {
-  data: StooqDataPoint[];
+export interface FallbackResult extends Series {
   /** Set when Google stood in, telling the user what they're looking at. */
   notice?: string;
 }
@@ -36,24 +35,24 @@ export interface FallbackResult {
  */
 export async function fetchYahooWithFallback(ticker: string): Promise<FallbackResult> {
   try {
-    return { data: await fetchYahooData(ticker) };
+    return await fetchYahooData(ticker);
   } catch (error) {
     if (!(error instanceof YahooUnavailableError)) throw error;
     const symbol = googleStandIn(ticker);
     if (!symbol) throw error;
 
-    let data: StooqDataPoint[];
+    let series: Series;
     try {
-      data = await fetchGoogleFinance(symbol);
+      series = await fetchGoogleFinance(symbol);
     } catch (googleError) {
       const reason = googleError instanceof Error ? googleError.message : String(googleError);
       throw new Error(`${error.message} Google Finance couldn't stand in either (${symbol}): ${reason}`);
     }
-    if (data.length < 2) {
+    if (series.data.length < 2) {
       throw new Error(`${error.message} Google Finance has no data for ${symbol} either.`);
     }
     return {
-      data,
+      ...series,
       notice:
         `Yahoo Finance didn't respond, so ${ticker.trim().toUpperCase()} was loaded from Google ` +
         `Finance (${symbol}) instead — raw closing prices, no adjusted close. Reload in a few ` +

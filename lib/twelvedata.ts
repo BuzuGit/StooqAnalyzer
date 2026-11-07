@@ -1,4 +1,4 @@
-import { StooqDataPoint } from './types';
+import { AssetName, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
 
 const TD_BASE = 'https://api.twelvedata.com';
@@ -76,6 +76,33 @@ async function tdGet<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+interface TwelveDataSearchResponse {
+  data?: Array<{ symbol?: string; instrument_name?: string; exchange?: string; country?: string }>;
+}
+
+/**
+ * The instrument's name from Twelve Data's symbol search, which costs no API
+ * credits (checked 2026-11-07), so it doesn't eat into the free tier's 8 a minute.
+ * A search lists every listing of the symbol; time_series picks the US one unless
+ * an exchange is given, so the name is picked the same way. Best-effort: a miss
+ * just means no name.
+ */
+export async function twelveDataName(ticker: string): Promise<AssetName> {
+  const key = process.env.TWELVEDATA_API_KEY;
+  const { symbol, params } = toTwelveDataSymbol(ticker);
+  if (!key) return { symbol };
+
+  const json = await tdGet<TwelveDataSearchResponse>(
+    `/symbol_search?symbol=${encodeURIComponent(symbol)}&outputsize=30&apikey=${encodeURIComponent(key)}`
+  );
+  const matches = (json?.data ?? []).filter((m) => m.symbol === symbol && m.instrument_name);
+  const exchange = decodeURIComponent(params.replace(/^&exchange=/, ''));
+  const pick = exchange
+    ? matches.find((m) => m.exchange === exchange)
+    : matches.find((m) => m.country === 'United States') ?? matches[0];
+  return { name: pick?.instrument_name, symbol };
 }
 
 /**

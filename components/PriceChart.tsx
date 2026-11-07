@@ -371,6 +371,17 @@ export default function PriceChart({
     return niceLogAxisScale(values);
   }, [logScale, inPercent, drawdownData, displayData, tickers]);
 
+  // Full names above the title: "iShares Edge MSCI World … (IWMO.L)". A lone asset
+  // the source gave no name for shows nothing, since the title already says its
+  // ticker; in a comparison it's listed by ticker, so every line keeps a row.
+  const assetLines = tickersData
+    .map((td, index) => ({
+      ticker: td.ticker,
+      color: colorFor(index),
+      label: td.name ? (td.symbol ? `${td.name} (${td.symbol})` : td.name) : isSingleTicker ? '' : td.ticker,
+    }))
+    .filter((line) => line.label);
+
   // Calculate SMA distance data for the distance chart
   const smaDistanceData = useMemo(() => {
     if (!isSingleTicker || primaryData.length === 0) return [];
@@ -579,6 +590,21 @@ export default function PriceChart({
       <div className="mb-4">
         <div className="flex items-start gap-2">
           <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2">
+            {assetLines.length > 0 && (
+              <div className="basis-full">
+                {assetLines.map((line) => (
+                  <p key={line.ticker} className="flex items-center gap-1.5 text-sm text-muted">
+                    {!isSingleTicker && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: line.color }}
+                      />
+                    )}
+                    {line.label}
+                  </p>
+                ))}
+              </div>
+            )}
             <h2 className="text-lg font-semibold text-content">
               {isSingleTicker
                 ? `${primaryTicker} ${inPercent ? 'Return' : 'Price'} & Drawdown`

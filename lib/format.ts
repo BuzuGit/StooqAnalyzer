@@ -21,3 +21,20 @@ export function formatPrice(price: number | null | undefined, whenNull = ''): st
   if (price >= 100) return price.toFixed(3);
   return price.toFixed(4);
 }
+
+/**
+ * English name of a currency pair from its ISO codes, e.g. USD + PLN →
+ * "US Dollar / Polish Zloty". Gold (XAU) reads as "Gold"; an unknown code is
+ * kept as typed.
+ */
+export function currencyPairName(base: string, quote: string): string {
+  const names = new Intl.DisplayNames(['en'], { type: 'currency' });
+  const of = (code: string) => {
+    try {
+      return names.of(code) ?? code;
+    } catch {
+      return code;
+    }
+  };
+  return `${of(base)} / ${of(quote)}`;
+}

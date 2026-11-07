@@ -7,12 +7,12 @@ import {
 } from '@/lib/stooq';
 import { fetchYahooWithFallback } from '@/lib/yahooFallback';
 import { cached } from '@/lib/seriesCache';
-import { fetchTwelveData, TwelveDataConfigError } from '@/lib/twelvedata';
+import { fetchTwelveData, twelveDataName, TwelveDataConfigError } from '@/lib/twelvedata';
 import { fetchGoogleFinance, GoogleFinanceConfigError } from '@/lib/googlefinance';
-import { fetchNbpData, NbpTickerError } from '@/lib/nbp';
-import { fetchFredData, FredSeriesError } from '@/lib/fred';
-import { fetchGusData, GusSeriesError } from '@/lib/gus';
-import { ApiResponse, TickerData, StooqDataPoint } from '@/lib/types';
+import { fetchNbpData, nbpName, NbpTickerError } from '@/lib/nbp';
+import { fetchFredData, fredName, FredSeriesError } from '@/lib/fred';
+import { fetchGusData, gusName, GusSeriesError } from '@/lib/gus';
+import { ApiResponse, AssetName, Series, TickerData, StooqDataPoint } from '@/lib/types';
 import { UNAVAILABLE_SOURCES } from '@/lib/sources';
 
 type DataSource = 'stooq' | 'yahoo' | 'twelvedata' | 'google' | 'nbp' | 'fred' | 'gus';
@@ -41,12 +41,31 @@ const FALLBACK_SECONDS = 5 * 60;
 function cachedSeries(
   source: DataSource,
   ticker: string,
-  load: (ticker: string) => Promise<StooqDataPoint[]>
-): Promise<StooqDataPoint[]> {
+  load: (ticker: string) => Promise<Series>
+): Promise<Series> {
   return cached(`${source}:${ticker.trim().toUpperCase()}`, async () => {
     const value = await load(ticker);
-    return { value, ttlMs: value.length > 0 ? FRESH_SECONDS * 1000 : 0 };
+    return { value, ttlMs: value.data.length > 0 ? FRESH_SECONDS * 1000 : 0 };
   });
+}
+
+/**
+ * A source whose download carries no name, paired with a separate lookup for one.
+ * The name is a nicety: if its lookup fails, the prices still load without it.
+ */
+function withName(
+  fetchData: (ticker: string) => Promise<StooqDataPoint[]>,
+  nameOf: (ticker: string) => AssetName | Promise<AssetName>
+): (ticker: string) => Promise<Series> {
+  return async (ticker) => {
+    const [data, name] = await Promise.all([
+      fetchData(ticker),
+      Promise.resolve()
+        .then(() => nameOf(ticker))
+        .catch((): AssetName => ({})),
+    ]);
+    return { ...name, data };
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -104,7 +123,7 @@ export async function GET(request: NextRequest) {
     // Yahoo requests are independent — fetch them in parallel. Stooq must stay
     // sequential: all tickers share one CAPTCHA-unlocked session and Stooq rate
     // limits per IP.
-    let datasets: StooqDataPoint[][];
+    let datasets: Series[];
     const notices: string[] = [];
     if (source === 'yahoo') {
       const results = await Promise.all(
@@ -116,27 +135,25 @@ export async function GET(request: NextRequest) {
           })
         )
       );
-      datasets = results.map((result) => result.data);
+      datasets = results;
       for (const result of results) if (result.notice) notices.push(result.notice);
     } else if (source === 'twelvedata') {
-      datasets = await Promise.all(
-        tickers.map((ticker) => cachedSeries(source, ticker, fetchTwelveData))
-      );
+      const load = withName(fetchTwelveData, twelveDataName);
+      datasets = await Promise.all(tickers.map((ticker) => cachedSeries(source, ticker, load)));
     } else if (source === 'fred') {
-      datasets = await Promise.all(
-        tickers.map((ticker) => cachedSeries(source, ticker, fetchFredData))
-      );
+      const load = withName(fetchFredData, fredName);
+      datasets = await Promise.all(tickers.map((ticker) => cachedSeries(source, ticker, load)));
     } else if (source === 'gus') {
       // Tickers share one file per frequency, downloaded once (see lib/gus).
-      datasets = await Promise.all(
-        tickers.map((ticker) => cachedSeries(source, ticker, fetchGusData))
-      );
+      const load = withName(fetchGusData, gusName);
+      datasets = await Promise.all(tickers.map((ticker) => cachedSeries(source, ticker, load)));
     } else if (source === 'nbp') {
       // Each pair already fans out ~25 windowed requests internally, so keep the
       // tickers themselves sequential rather than multiplying that against NBP.
+      const load = withName(fetchNbpData, nbpName);
       datasets = [];
       for (const ticker of tickers) {
-        datasets.push(await cachedSeries(source, ticker, fetchNbpData));
+        datasets.push(await cachedSeries(source, ticker, load));
       }
     } else if (source === 'google') {
       // The Apps Script proxy serializes on one sheet — fetch sequentially.
@@ -148,19 +165,21 @@ export async function GET(request: NextRequest) {
       const token = await ensureStooqSession(sessionToken);
       datasets = [];
       for (const ticker of tickers) {
-        datasets.push(await fetchStooqData(ticker, token, apiKey));
+        // Stooq's CSVs carry no names.
+        datasets.push({ data: await fetchStooqData(ticker, token, apiKey) });
       }
     }
 
     const results: TickerData[] = [];
     for (let i = 0; i < tickers.length; i++) {
-      if (datasets[i].length === 0) {
+      const { data, name, symbol } = datasets[i];
+      if (data.length === 0) {
         return NextResponse.json<ApiResponse>(
           { success: false, error: `Invalid ticker or no data: ${tickers[i]}` },
           { status: 404 }
         );
       }
-      results.push({ ticker: tickers[i].toUpperCase(), data: datasets[i] });
+      results.push({ ticker: tickers[i].toUpperCase(), data, name, symbol });
     }
 
     // Stooq's answer depends on a CAPTCHA session, so it's never shared.

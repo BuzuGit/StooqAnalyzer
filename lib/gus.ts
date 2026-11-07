@@ -1,4 +1,4 @@
-import { StooqDataPoint } from './types';
+import { AssetName, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
 
 /**
@@ -55,14 +55,41 @@ interface GusSeries {
    * period before the first one = 100. 'rate' is the index minus 100: % change.
    */
   kind: 'level' | 'rate';
+  /** What the chart heading calls it. */
+  title: string;
 }
 
 const SERIES: Record<string, GusSeries> = {
-  CPI: { frequency: 'monthly', presentation: /^Poprzedni miesi/i, kind: 'level' },
-  CPI_MOM: { frequency: 'monthly', presentation: /^Poprzedni miesi/i, kind: 'rate' },
-  CPI_YOY: { frequency: 'monthly', presentation: /^Analogiczny miesi/i, kind: 'rate' },
-  CPI_ANNUAL: { frequency: 'annual', presentation: /^Rok poprzedni/i, kind: 'level' },
-  CPI_ANNUAL_YOY: { frequency: 'annual', presentation: /^Rok poprzedni/i, kind: 'rate' },
+  CPI: {
+    frequency: 'monthly',
+    presentation: /^Poprzedni miesi/i,
+    kind: 'level',
+    title: 'Poland consumer price index (CPI), monthly price level',
+  },
+  CPI_MOM: {
+    frequency: 'monthly',
+    presentation: /^Poprzedni miesi/i,
+    kind: 'rate',
+    title: 'Poland CPI inflation, % month on month',
+  },
+  CPI_YOY: {
+    frequency: 'monthly',
+    presentation: /^Analogiczny miesi/i,
+    kind: 'rate',
+    title: 'Poland CPI inflation, % year on year (monthly)',
+  },
+  CPI_ANNUAL: {
+    frequency: 'annual',
+    presentation: /^Rok poprzedni/i,
+    kind: 'level',
+    title: 'Poland consumer price index (CPI), annual price level',
+  },
+  CPI_ANNUAL_YOY: {
+    frequency: 'annual',
+    presentation: /^Rok poprzedni/i,
+    kind: 'rate',
+    title: 'Poland CPI inflation, % year on year (annual)',
+  },
 };
 
 /** Raised when a ticker isn't one of the GUS series offered here. */
@@ -179,6 +206,11 @@ export function toGusSeries(ticker: string): string {
     );
   }
   return name;
+}
+
+export function gusName(ticker: string): AssetName {
+  const symbol = toGusSeries(ticker);
+  return { name: SERIES[symbol].title, symbol };
 }
 
 /**

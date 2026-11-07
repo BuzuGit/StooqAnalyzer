@@ -29,7 +29,7 @@ export function applyPriceBasis(data: StooqDataPoint[], basis: PriceBasis): Stoo
 export function tickersWithBasis(tickers: TickerData[], basis: PriceBasis): TickerData[] {
   if (basis === 'close') return tickers;
   return tickers.map((td) => ({
-    ticker: td.ticker,
+    ...td,
     data: applyPriceBasis(td.data, basis),
   }));
 }
