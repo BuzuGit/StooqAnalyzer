@@ -1,4 +1,4 @@
-import { StooqDataPoint } from './types';
+import { Series, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
 
 const YAHOO_CHART_PATH = '/v8/finance/chart/';
@@ -155,9 +155,33 @@ export function yahooCandidates(ticker: string): string[] {
   return candidates;
 }
 
+interface YahooChartMeta {
+  symbol?: string;
+  longName?: string;
+  shortName?: string;
+  instrumentType?: string;
+}
+
+/**
+ * The name to show for a Yahoo symbol. A future's name is the contract trading
+ * today ("Gold Dec 26"), not the continuous series the chart plots, so its month
+ * is dropped: "Gold futures".
+ */
+function yahooName(meta: YahooChartMeta | undefined): string | undefined {
+  if (!meta) return undefined;
+  if (meta.instrumentType === 'FUTURE') {
+    const base = (meta.shortName || meta.longName || '')
+      .replace(/\s+[A-Z][a-z]{2}\s+\d{2}$/, '')
+      .trim();
+    return base ? `${base} futures` : undefined;
+  }
+  return meta.longName?.trim() || meta.shortName?.trim() || undefined;
+}
+
 interface YahooChartResponse {
   chart?: {
     result?: Array<{
+      meta?: YahooChartMeta;
       timestamp?: number[];
       indicators?: {
         quote?: Array<{
@@ -176,13 +200,13 @@ interface YahooChartResponse {
 
 /**
  * Fetch daily history for a single exact Yahoo symbol.
- * Returns the OHLCV points; 'not-found' if Yahoo has no usable daily history for
- * it (so the caller can try the next candidate); or 'unavailable' if Yahoo didn't
- * answer properly at all, in which case other candidates won't fare better.
+ * Returns the OHLCV points and name; 'not-found' if Yahoo has no usable daily
+ * history for it (so the caller can try the next candidate); or 'unavailable' if
+ * Yahoo didn't answer properly at all, in which case other candidates won't fare better.
  */
 async function fetchYahooSymbol(
   symbol: string
-): Promise<StooqDataPoint[] | 'not-found' | 'unavailable'> {
+): Promise<Series | 'not-found' | 'unavailable'> {
   // Use explicit period1/period2 (epoch seconds) rather than range=max:
   // range=max downsamples long histories to monthly bars, which breaks daily
   // indicators like the 50/200-day SMA. period1=0 forces true daily granularity.
@@ -240,7 +264,7 @@ async function fetchYahooSymbol(
 
   // Yahoo returns ascending order already, but guarantee it.
   data.sort((a, b) => a.date.localeCompare(b.date));
-  return data;
+  return { data, name: yahooName(result.meta), symbol: result.meta?.symbol || symbol };
 }
 
 /**
@@ -248,7 +272,7 @@ async function fetchYahooSymbol(
  * candidate symbol until one returns usable data.
  * Throws with a descriptive message when none of them work.
  */
-export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> {
+export async function fetchYahooData(ticker: string): Promise<Series> {
   // An ISIN must first be resolved to a Yahoo symbol (funds/ETFs -> "0P...").
   if (isIsin(ticker.trim().toUpperCase())) {
     const isin = ticker.trim().toUpperCase();
@@ -257,7 +281,8 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
       throw new Error(`Could not find ISIN ${isin} on Yahoo Finance.`);
     }
     const data = await fetchYahooSymbol(symbol);
-    if (Array.isArray(data)) return data;
+    // Yahoo's 0P… fund id means nothing to a reader; the ISIN they typed does.
+    if (typeof data === 'object') return { ...data, symbol: isin };
     if (data === 'unavailable') {
       throw new YahooUnavailableError(`Yahoo Finance didn't respond for ISIN ${isin}.`);
     }
@@ -267,7 +292,7 @@ export async function fetchYahooData(ticker: string): Promise<StooqDataPoint[]> 
   const candidates = yahooCandidates(ticker);
   for (const symbol of candidates) {
     const data = await fetchYahooSymbol(symbol);
-    if (Array.isArray(data)) return data;
+    if (typeof data === 'object') return data;
     // Yahoo is down, not missing the symbol — trying the other spellings would
     // only wait out the same timeouts again.
     if (data === 'unavailable') {

@@ -1,5 +1,6 @@
-import { StooqDataPoint } from './types';
+import { AssetName, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
+import { currencyPairName } from './format';
 
 const NBP_BASE = 'https://api.nbp.pl/api';
 
@@ -91,6 +92,17 @@ export function parseNbpTicker(ticker: string): NbpTicker {
   if (!SERIES_CODES.has(base)) throw unsupported(base);
   if (!SERIES_CODES.has(quote)) throw unsupported(quote);
   return { kind: 'cross', base, quote };
+}
+
+/** "US Dollar / Polish Zloty (USDPLN)"; gold is NBP's per-gram fixing. */
+export function nbpName(ticker: string): AssetName {
+  const t = parseNbpTicker(ticker);
+  const [base, quote] =
+    t.kind === 'direct' ? [t.code, 'PLN'] : t.kind === 'inverse' ? ['PLN', t.code] : [t.base, t.quote];
+  const name = currencyPairName(base, quote)
+    .replace(/^Gold /, 'Gold (1 g) ')
+    .replace(/ Gold$/, ' Gold (1 g)');
+  return { name, symbol: base + quote };
 }
 
 /** Today in Warsaw — NBP's own calendar, and it rejects an end date in the future. */

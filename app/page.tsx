@@ -101,7 +101,7 @@ export default function Home() {
     }
 
     return basisTickersData.map((tickerData) => ({
-      ticker: tickerData.ticker,
+      ...tickerData,
       data: filterDataByDateRange(tickerData.data, dateRange.start, dateRange.end),
     }));
   }, [basisTickersData, dateRange]);

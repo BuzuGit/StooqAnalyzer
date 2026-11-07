@@ -1,4 +1,4 @@
-import { StooqDataPoint } from './types';
+import { AssetName, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
 
 /**
@@ -28,6 +28,34 @@ export function toFredSeriesId(ticker: string): string {
     );
   }
   return id;
+}
+
+/**
+ * The series title, read off its page on fred.stlouisfed.org (the CSV carries
+ * none), whose <title> is "<series title> (<ID>) | FRED | St. Louis Fed".
+ * Best-effort: any failure just means no name.
+ */
+export async function fredName(ticker: string): Promise<AssetName> {
+  try {
+    const id = toFredSeriesId(ticker);
+    const res = await fetchWithTimeout(
+      `https://fred.stlouisfed.org/series/${encodeURIComponent(id)}`,
+      { cache: 'no-store' },
+      'FRED'
+    );
+    if (!res.ok) return { symbol: id };
+    const title = /<title>([^<]*)<\/title>/i.exec(await res.text())?.[1] ?? '';
+    const name = title
+      .replace(/&amp;/g, '&')
+      .replace(/&#0*39;|&apos;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/\s*\|\s*FRED\b.*$/i, '')
+      .replace(new RegExp(`\\s*\\(${id}\\)$`), '')
+      .trim();
+    return { name: name || undefined, symbol: id };
+  } catch {
+    return {};
+  }
 }
 
 /**

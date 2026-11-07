@@ -1,5 +1,6 @@
-import { StooqDataPoint } from './types';
+import { Series, StooqDataPoint } from './types';
 import { fetchWithTimeout } from './http';
+import { currencyPairName } from './format';
 
 /**
  * The proxy drives a live spreadsheet: GOOGLEFINANCE recalculates, the script reads
@@ -54,6 +55,8 @@ export function toGoogleSymbol(ticker: string): string {
 
 interface GoogleFinanceResponse {
   error?: string;
+  /** GOOGLEFINANCE(ticker, "name"); only sent by the script from November 2026 on. */
+  name?: string;
   rows?: Array<{
     date: string;
     open: number | string;
@@ -68,7 +71,7 @@ interface GoogleFinanceResponse {
  * Fetch daily history from a Google Apps Script web app that proxies
  * GOOGLEFINANCE(). Requires GOOGLE_FINANCE_URL (the deployed /exec URL).
  */
-export async function fetchGoogleFinance(ticker: string): Promise<StooqDataPoint[]> {
+export async function fetchGoogleFinance(ticker: string): Promise<Series> {
   const base = process.env.GOOGLE_FINANCE_URL;
   if (!base) {
     throw new GoogleFinanceConfigError(
@@ -122,5 +125,9 @@ export async function fetchGoogleFinance(ticker: string): Promise<StooqDataPoint
   }
 
   data.sort((a, b) => a.date.localeCompare(b.date));
-  return data;
+
+  // Google has no name for a currency pair, so one is built from its codes.
+  const pair = /^CURRENCY:([A-Z]{3})([A-Z]{3})$/.exec(symbol);
+  const name = pair ? currencyPairName(pair[1], pair[2]) : json.name?.trim() || undefined;
+  return { data, name, symbol };
 }
